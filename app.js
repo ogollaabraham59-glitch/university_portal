@@ -32,7 +32,7 @@ mongoose.connect(process.env.MONGO_URL)
     .catch(() => console.log('mongodb connection error', err))
 
 app.get('/', (req, res) => {
-    res.send("school api running ")
+    res.send("university api running ")
 })
 
 const PORT = process.env.PORT
