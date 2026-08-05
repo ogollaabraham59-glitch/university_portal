@@ -10,18 +10,18 @@ const {
     deleteUniversity
 } = require("../controllers/superadmindashController");
 
-const { auth } = require("../midllewear/auth");
+const { auth, authorizeRoles } = require("../midllewear/auth");
 
-router.get("/dashboard", auth, superAdminDashboard);
+router.get("/dashboard", auth, authorizeRoles("super_admin"), superAdminDashboard);
 
-router.get("/users", auth, getAllUsers);
+router.get("/users", auth, authorizeRoles("super_admin"), getAllUsers);
 
-router.get("/universities", auth, getAllUniversities);
+router.get("/universities", auth, authorizeRoles("super_admin"), getAllUniversities);
 
-router.put("/verify/:id", auth, verifyUniversity);
+router.put("/verify/:id", auth, authorizeRoles("super_admin"), verifyUniversity);
 
-router.delete("/users/:id", auth, deleteUser);
+router.delete("/users/:id", auth, authorizeRoles("super_admin"), deleteUser);
 
-router.delete("/universities/:id", auth, deleteUniversity);
+router.delete("/universities/:id", auth, authorizeRoles("super_admin"), deleteUniversity);
 
 module.exports = router;

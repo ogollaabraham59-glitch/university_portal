@@ -9,16 +9,16 @@ const {
     deleteStudentProfile
 } = require("../controllers/studentdashController");
 
-const { auth } = require("../midllewear/auth");
+const { auth, authorizeRoles } = require("../midllewear/auth");
 
-router.get("/dashboard", auth, studentDashboard);
+router.get("/dashboard", auth, authorizeRoles("admin"), studentDashboard);
 
-router.get("/dashboard/statistics", auth, dashboardStatistics);
+router.get("/dashboard/statistics", auth, authorizeRoles("admin"), dashboardStatistics);
 
-router.get("/dashboard/profile", auth, getStudentProfile);
+router.get("/dashboard/profile", auth, authorizeRoles("admin"), getStudentProfile);
 
-router.put("/dashboard/profile", auth, updateStudentProfile);
+router.put("/dashboard/profile", auth, authorizeRoles("admin"), updateStudentProfile);
 
-router.delete("/dashboard/profile", auth, deleteStudentProfile);
+router.delete("/dashboard/profile", auth, authorizeRoles("admin"), deleteStudentProfile);
 
 module.exports = router;
