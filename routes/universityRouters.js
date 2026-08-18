@@ -9,7 +9,7 @@ const {
     getUniversityById,
     updateUniversity,
     deleteUniversity
-} = require("../controllers/universityController");
+} = require("../controllers/universityControllers");
 
 
 // Add University
