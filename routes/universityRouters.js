@@ -1,16 +1,32 @@
-const express = require('express')
-const router = express.Router()
-const universityControllers = require('../controllers/universityControllers')
-const { auth, authorizeRoles } = require('../midllewear/auth')
 
-//add classroom
+const express = require("express");
+
+const router = express.Router();
+
+const {
+    addUniversity,
+    getAllUniversities,
+    getUniversityById,
+    updateUniversity,
+    deleteUniversity
+} = require("../controllers/universityController");
 
 
-router.post('/', auth, authorizeRoles("university_admin", "super_admin"), universityControllers.newuniversity)
-router.get('/', auth, authorizeRoles("university_admin", "super_admin"), universityControllers.getAlluniversity)
-router.get('/:id', auth, authorizeRoles("super_admin", "university_admin"), universityControllers.getAlluniversityById)
-router.put('/:id', auth, authorizeRoles("university_admin"), universityControllers.updateuniversity)
-router.delete('/:id', auth, authorizeRoles("super_admin"), universityControllers.deletuniversity)
-//
+// Add University
+router.post("/", addUniversity);
 
-module.exports = router
+// Get All Universities
+router.get("/", getAllUniversities);
+
+// Get University By ID
+router.get("/:id", getUniversityById);
+
+// Update University
+router.put("/:id", updateUniversity);
+
+// Delete University
+router.delete("/:id", deleteUniversity);
+
+
+module.exports = router;
+

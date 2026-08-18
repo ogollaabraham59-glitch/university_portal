@@ -1,74 +1,158 @@
-const { university } = require('../models/universityModel')
 
-//add class room
-exports.newuniversity = async (req, res) => {
+const { University } = require("../models/universityModel");
+
+
+// =====================================
+// Add University
+// =====================================
+
+exports.addUniversity = async (req, res) => {
     try {
-        const adduniversity = req.body
-        const saveduniversity = new university(adduniversity);
-        await saveduniversity.save()
-        res.status(201).json(saveduniversity)
+
+        const universityData = req.body;
+
+        const newUniversity = new University(universityData);
+
+        const savedUniversity = await newUniversity.save();
+
+        res.status(201).json({
+            message: "University created successfully",
+            university: savedUniversity
+        });
+
     } catch (error) {
-        res.status(500).json({ message: error.message })
+
+        res.status(500).json({
+            message: error.message
+        });
 
     }
-}
+};
 
-//fetch all class rooms
 
-exports.getAlluniversity = async (req, res) => {
+// =====================================
+// Get All Universities
+// =====================================
+
+exports.getAllUniversities = async (req, res) => {
     try {
 
-        const University = await university.find()
- res.status(200).json(University)
+        const universities = await University.find();
+
+        res.status(200).json(universities);
 
     } catch (error) {
-        res.status(500).json({ message: error.message })
+
+        res.status(500).json({
+            message: error.message
+        });
 
     }
-}
+};
 
-//ting a single classroom
-exports.getAlluniversityById = async (req, res) => {
+
+// =====================================
+// Get University By ID
+// =====================================
+
+exports.getUniversityById = async (req, res) => {
     try {
-        const University = await university.findById(req.params.id, req.body)
 
-
-        if (!university) return res.status(404).json({ message: ' university not found' })
-        res.status(200).json(University)
-    } catch (error) {
-        res.status(500).json({ message: error.message })
-
-    }
-
-}
-
-//updating a class
-exports.updateuniversity = async (req, res) => {
-    try {
-        const update = await university.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true }
-        )
-        if (!update) return res.status(404).json({ message: "university not found" })
-        res.status(200).json(update)
-    } catch (error) {
-        res.status(500).json({ message: error.message })
-
-    }
-}
-
-// deleting class room
-exports.deletuniversity = async (req, res) => {
-    try {
-        const delet = await university.findByIdAndDelete(
+        const university = await University.findById(
             req.params.id
+        );
 
-        )
-        if (!delet) return res.status(404).json({ message: 'connot find classroom' })
-        res.status(200).json(delet)
+        if (!university) {
+
+            return res.status(404).json({
+                message: "University not found"
+            });
+
+        }
+
+        res.status(200).json(university);
+
     } catch (error) {
-        res.status(500).json({ message: error.message })
+
+        res.status(500).json({
+            message: error.message
+        });
 
     }
-}
+};
+
+
+// =====================================
+// Update University
+// =====================================
+
+exports.updateUniversity = async (req, res) => {
+    try {
+
+        const updatedUniversity =
+            await University.findByIdAndUpdate(
+                req.params.id,
+                req.body,
+                {
+                    new: true,
+                    runValidators: true
+                }
+            );
+
+        if (!updatedUniversity) {
+
+            return res.status(404).json({
+                message: "University not found"
+            });
+
+        }
+
+        res.status(200).json({
+            message: "University updated successfully",
+            university: updatedUniversity
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            message: error.message
+        });
+
+    }
+};
+
+
+// =====================================
+// Delete University
+// =====================================
+
+exports.deleteUniversity = async (req, res) => {
+    try {
+
+        const deletedUniversity =
+            await University.findByIdAndDelete(
+                req.params.id
+            );
+
+        if (!deletedUniversity) {
+
+            return res.status(404).json({
+                message: "University not found"
+            });
+
+        }
+
+        res.status(200).json({
+            message: "University deleted successfully",
+            university: deletedUniversity
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            message: error.message
+        });
+
+    }
+};
+
