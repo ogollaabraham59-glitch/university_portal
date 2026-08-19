@@ -1,25 +1,22 @@
-
 const { User } = require('../models/universityModel');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-// Create the first admin account
-exports.registerAdmin = async (req, res) => {
+// Register normal user/student
+exports.registerUser = async (req, res) => {
     try {
         const {
             firstName,
             lastName,
             phone,
             email,
-            password,
-            role,
-            secretkey
+            password
         } = req.body;
 
-        // Verify admin secret key
-        if (secretkey !== process.env.SECRET_KEY) {
-            return res.status(403).json({
-                message: "Unauthorized access"
+        // Validate required fields
+        if (!firstName || !lastName || !phone || !email || !password) {
+            return res.status(400).json({
+                message: "All fields are required"
             });
         }
 
@@ -40,23 +37,33 @@ exports.registerAdmin = async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create admin
+        // Create normal user
         const user = new User({
             firstName,
             lastName,
             phone,
             email,
             password: hashedPassword,
-            role: role || "university_admin",
-            isVerified: true,
-            student: null
+
+            // IMPORTANT:
+            // Never allow the user to choose their role
+            role: "student",
+
+            isVerified: true
         });
 
         const newUser = await user.save();
 
         res.status(201).json({
-            message: "Admin account created successfully",
-            user: newUser
+            message: "Account created successfully",
+            user: {
+                id: newUser._id,
+                firstName: newUser.firstName,
+                lastName: newUser.lastName,
+                phone: newUser.phone,
+                email: newUser.email,
+                role: newUser.role
+            }
         });
 
     } catch (error) {
@@ -65,7 +72,9 @@ exports.registerAdmin = async (req, res) => {
         });
     }
 };
-//login
+
+
+// Login
 exports.logIn = async (req, res) => {
     try {
 
