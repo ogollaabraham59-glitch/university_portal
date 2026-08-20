@@ -8,7 +8,7 @@ const { auth, authorizeRoles } = require("../midllewear/auth");
 router.post(
     "/",
     auth,
-    authorizeRoles("student"),
+    authorizeRoles("student", "university_admin", "super_admin"),
     kcseResultController.addKcseResult
 );
 
@@ -16,14 +16,13 @@ router.post(
 router.get(
     "/",
     auth,
-    authorizeRoles("admin"),
     kcseResultController.getAllKcseResults
 );
 
 // Get Result By ID
 router.get(
     "/:id",
-    auth,
+    auth, authorizeRoles("university_admin", "super-admin"),
     kcseResultController.getKcseResultById
 );
 
@@ -31,7 +30,7 @@ router.get(
 router.put(
     "/:id",
     auth,
-    authorizeRoles("admin"),
+    authorizeRoles("university_admin", "super_admin"),
     kcseResultController.updateKcseResult
 );
 
@@ -39,7 +38,7 @@ router.put(
 router.delete(
     "/:id",
     auth,
-    authorizeRoles("admin"),
+    authorizeRoles("university_admin", "super_admin"),
     kcseResultController.deleteKcseResult
 );
 
