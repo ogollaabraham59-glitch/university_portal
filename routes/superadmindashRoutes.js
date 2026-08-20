@@ -4,24 +4,117 @@ const router = express.Router();
 const {
     superAdminDashboard,
     getAllUsers,
-    getAllUniversities,
-    verifyUniversity,
+    createUniversityAdmin,
     deleteUser,
-    deleteUniversity
+
+    getAllUniversities,
+    createUniversity,
+    verifyUniversity,
+    deleteUniversity,
+
+    getAllCourses,
+    createCourse,
+    deleteCourse
 } = require("../controllers/superadmindashController");
+
 
 const { auth, authorizeRoles } = require("../midllewear/auth");
 
-router.get("/dashboard", auth, authorizeRoles("super_admin"), superAdminDashboard);
 
-router.get("/users", auth, authorizeRoles("super_admin"), getAllUsers);
 
-router.get("/universities", auth, authorizeRoles("super_admin"), getAllUniversities);
+// ======================================
+// Dashboard
+// ======================================
 
-router.put("/verify/:id", auth, authorizeRoles("super_admin"), verifyUniversity);
+router.get(
+    "/dashboard", auth,
+    authorizeRoles("super_admin"), superAdminDashboard
 
-router.delete("/users/:id", auth, authorizeRoles("super_admin"), deleteUser);
+);
 
-router.delete("/universities/:id", auth, authorizeRoles("super_admin"), deleteUniversity);
+
+// ======================================
+// USERS
+// ======================================
+
+router.get(
+    "/users", auth,
+    authorizeRoles("super_admin"),
+    getAllUsers
+);
+
+router.post(
+    "/users/university-admin",
+    auth,
+    authorizeRoles("super_admin"),
+    createUniversityAdmin
+);
+
+router.delete(
+    "/users/:id",
+    auth,
+    authorizeRoles("super_admin"),
+    deleteUser
+);
+
+
+// ======================================
+// UNIVERSITIES
+// ======================================
+
+router.get(
+    "/universities",
+    auth,
+    authorizeRoles("super_admin"),
+    getAllUniversities
+);
+
+router.post(
+    "/universities",
+    auth,
+    authorizeRoles("super_admin"),
+    createUniversity
+);
+
+router.put(
+    "/universities/:id/verify",
+    auth,
+    authorizeRoles("super_admin"),
+    verifyUniversity
+);
+
+router.delete(
+    "/universities/:id",
+    auth,
+    authorizeRoles("super_admin"),
+    deleteUniversity
+);
+
+
+// ======================================
+// COURSES
+// ======================================
+
+router.get(
+    "/courses",
+    auth,
+    authorizeRoles("super_admin"),
+    getAllCourses
+);
+
+router.post(
+    "/courses",
+    auth,
+    authorizeRoles("super_admin"),
+    createCourse
+);
+
+router.delete(
+    "/courses/:id",
+    auth,
+    authorizeRoles("super_admin"),
+    deleteCourse
+);
+
 
 module.exports = router;
