@@ -29,9 +29,13 @@ app.use('/api/superadmin', superadmin)
 
 
 ///connection to database
+// mongoose.connect(process.env.MONGO_URL)
+//     .then(() => console.log('Mongodb connected)'))
+//     .catch(() => console.log('mongodb connection error', err))
+
 mongoose.connect(process.env.MONGO_URL)
-    .then(() => console.log('Mongodb connected)'))
-    .catch(() => console.log('mongodb connection error', err))
+    .then(() => console.log('MongoDB connected'))
+    .catch((err) => console.log('MongoDB connection error:', err));
 
 app.get('/', (req, res) => {
     res.send("university api running ")

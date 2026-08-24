@@ -11,10 +11,12 @@ const bcrypt = require("bcrypt");
 // Helper: Make sure current user is Super Admin
 // ======================================
 const checkSuperAdmin = async (req, res) => {
-    const admin = await User.findById(req.user.id);
+    const admin = await User.findById(req.user.userId);
+    console.log(admin)
 
     if (!admin) {
         res.status(401).json({
+            user: admin,
             success: false,
             message: "User not found or not authenticated"
         });
