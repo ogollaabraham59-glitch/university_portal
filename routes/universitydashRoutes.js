@@ -10,7 +10,7 @@ const {
 const { auth, authorizeRoles } = require("../midllewear/auth");
 
 router.get("/dashboard", auth, authorizeRoles('university_admin', "super_admin"), universityDashboard);
-router.put("/update", auth, authorizeRoles('university_admin'), updateUniversity);
+router.put("/update", auth, authorizeRoles('university_admin', "super_admin"), updateUniversity);
 router.delete("/delete", auth, authorizeRoles('super_admin'), deleteUniversity);
 
 module.exports = router;

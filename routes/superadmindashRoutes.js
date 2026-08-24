@@ -98,14 +98,14 @@ router.delete(
 router.get(
     "/courses",
     auth,
-    authorizeRoles("super_admin"),
+    authorizeRoles("super_admin", "university_admin"),
     getAllCourses
 );
 
 router.post(
     "/courses",
     auth,
-    authorizeRoles("super_admin"),
+    authorizeRoles("super_admin", "university_admin"),
     createCourse
 );
 
