@@ -86,7 +86,7 @@ const studentProfileSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
-const profile = mongoose.model("profile", studentProfileSchema)
+const Profile = mongoose.model("profile", studentProfileSchema)
 //upload result
 
 const kcseResultSchema = new mongoose.Schema({
@@ -119,7 +119,7 @@ const kcseResultSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const kcse = mongoose.model("kcse", kcseResultSchema)
+const Kcse = mongoose.model("kcse", kcseResultSchema)
 
 
 //university schema
@@ -153,7 +153,7 @@ const universitySchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
-const university = mongoose.model("university", universitySchema)
+const University = mongoose.model("university", universitySchema)
 
 //courses schema
 const courseSchema = new mongoose.Schema({
@@ -182,6 +182,6 @@ const courseSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
-const course = mongoose.model("course", courseSchema)
+const Course = mongoose.model("course", courseSchema)
 
-module.exports = { User, profile, university, kcse, course }
+module.exports = { User, Profile, University, Kcse, Course }

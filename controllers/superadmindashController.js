@@ -1,8 +1,8 @@
 const {
     User,
-    university,
-    course,
-    profile
+    University,
+    Course,
+    Profile
 } = require("../models/universityModel");
 
 const bcrypt = require("bcrypt");
@@ -11,12 +11,10 @@ const bcrypt = require("bcrypt");
 // Helper: Make sure current user is Super Admin
 // ======================================
 const checkSuperAdmin = async (req, res) => {
-    const admin = await User.findById(req.user.userId);
-    console.log(admin)
+    const admin = await User.findById(req.user.id);
 
     if (!admin) {
         res.status(401).json({
-            user: admin,
             success: false,
             message: "User not found or not authenticated"
         });
@@ -55,13 +53,13 @@ exports.superAdminDashboard = async (req, res) => {
             role: "university_admin"
         });
 
-        const totalUniversities = await university.countDocuments();
+        const totalUniversities = await University.countDocuments();
 
-        const totalCourses = await course.countDocuments();
+        const totalCourses = await Course.countDocuments();
 
-        const totalProfiles = await profile.countDocuments();
+        const totalProfiles = await Profile.countDocuments();
 
-        const verifiedUniversities = await university.countDocuments({
+        const verifiedUniversities = await University.countDocuments({
             verified: true
         });
 
@@ -148,7 +146,7 @@ exports.createUniversityAdmin = async (req, res) => {
         }
 
         // Check university
-        const universityExists = await university.findById(
+        const universityExists = await University.findById(
             university
         );
 
@@ -279,7 +277,7 @@ exports.createUniversity = async (req, res) => {
         }
 
         // Check duplicate university
-        const existingUniversity = await university.findOne({
+        const existingUniversity = await University.findOne({
             name
         });
 
@@ -290,7 +288,7 @@ exports.createUniversity = async (req, res) => {
             });
         }
 
-        const university = await university.create({
+        const university = await University.create({
             name,
             location,
             description,
@@ -326,7 +324,7 @@ exports.getAllUniversities = async (req, res) => {
 
         if (!isSuperAdmin) return;
 
-        const universities = await university.find();
+        const universities = await University.find();
 
         res.status(200).json({
             success: true,
@@ -356,7 +354,7 @@ exports.verifyUniversity = async (req, res) => {
 
         if (!isSuperAdmin) return;
 
-        const university = await university.findByIdAndUpdate(
+        const university = await University.findByIdAndUpdate(
             req.params.id,
             {
                 verified: true
@@ -401,7 +399,7 @@ exports.deleteUniversity = async (req, res) => {
 
         if (!isSuperAdmin) return;
 
-        const university = await university.findById(
+        const university = await University.findById(
             req.params.id
         );
 
@@ -419,12 +417,12 @@ exports.deleteUniversity = async (req, res) => {
         });
 
         // Delete courses belonging to university
-        await course.deleteMany({
+        await Course.deleteMany({
             university: university._id
         });
 
         // Delete university
-        await university.findByIdAndDelete(
+        await University.findByIdAndDelete(
             req.params.id
         );
 
@@ -474,7 +472,7 @@ exports.createCourse = async (req, res) => {
         }
 
         // Check university
-        const universityExists = await university.findById(
+        const universityExists = await University.findById(
             university
         );
 
@@ -486,7 +484,7 @@ exports.createCourse = async (req, res) => {
         }
 
         // Check duplicate course
-        const existingCourse = await course.findOne({
+        const existingCourse = await Course.findOne({
             name,
             university
         });
@@ -499,7 +497,7 @@ exports.createCourse = async (req, res) => {
             });
         }
 
-        const course = await course.create({
+        const course = await Course.create({
             name,
             code,
             description,
@@ -568,7 +566,7 @@ exports.deleteCourse = async (req, res) => {
 
         if (!isSuperAdmin) return;
 
-        const course = await course.findByIdAndDelete(
+        const course = await Course.findByIdAndDelete(
             req.params.id
         );
 
