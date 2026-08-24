@@ -8,7 +8,7 @@ const { auth, authorizeRoles } = require("../midllewear/auth");
 router.post(
     "/",
     auth,
-    authorizeRoles("university_admin"),
+    authorizeRoles("university_admin", "super_admin"),
     courseController.addCourse
 );
 
@@ -30,7 +30,7 @@ router.get(
 router.put(
     "/:id",
     auth,
-    authorizeRoles("university_admin"),
+    authorizeRoles("university_admin", "super_admin"),
     courseController.updateCourse
 );
 
