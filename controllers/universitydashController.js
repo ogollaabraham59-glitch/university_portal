@@ -1,17 +1,31 @@
 const { User, University } = require("../models/universityModel");
 
 // ======================================
-// University Dashboard
+// GET MY UNIVERSITY
+// University Admin
 // ======================================
 exports.universityDashboard = async (req, res) => {
     try {
-
         const user = await User.findById(req.user.id);
 
-        if (!user || user.role !== "university_admin") {
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        if (user.role !== "university_admin") {
             return res.status(403).json({
                 success: false,
-                message: "Access denied"
+                message: "Only university administrators can access this dashboard"
+            });
+        }
+
+        if (!user.university) {
+            return res.status(404).json({
+                success: false,
+                message: "No university is connected to this account"
             });
         }
 
@@ -24,89 +38,91 @@ exports.universityDashboard = async (req, res) => {
             });
         }
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             university
         });
 
     } catch (error) {
+        console.error("University dashboard error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
+
 // ======================================
-// Update My University
+// UPDATE MY UNIVERSITY
+// University Admin
 // ======================================
 exports.updateUniversity = async (req, res) => {
     try {
-
         const user = await User.findById(req.user.id);
 
-        if (!user || user.role !== "university_admin") {
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        if (user.role !== "university_admin") {
             return res.status(403).json({
                 success: false,
-                message: "Access denied"
+                message: "Only university administrators can update a university"
+            });
+        }
+
+        if (!user.university) {
+            return res.status(404).json({
+                success: false,
+                message: "No university is connected to this account"
             });
         }
 
         const university = await University.findByIdAndUpdate(
             user.university,
             req.body,
-            { new: true, runValidators: true }
+            {
+                new: true,
+                runValidators: true
+            }
         );
 
-        res.status(200).json({
+        if (!university) {
+            return res.status(404).json({
+                success: false,
+                message: "University not found"
+            });
+        }
+
+        return res.status(200).json({
             success: true,
             message: "University updated successfully",
             university
         });
 
     } catch (error) {
+        console.error("Update university error:", error);
 
-        res.status(500).json({
+        return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
+
 // ======================================
-// Delete My University
+// DELETE UNIVERSITY
+// University Admin NOT ALLOWED
 // ======================================
 exports.deleteUniversity = async (req, res) => {
-    try {
-
-        const user = await User.findById(req.user.id);
-
-        if (!user || user.role !== "university_admin") {
-            return res.status(403).json({
-                success: false,
-                message: "Access denied"
-            });
-        }
-
-        await University.findByIdAndDelete(user.university);
-
-        user.university = null;
-        await user.save();
-
-        res.status(200).json({
-            success: true,
-            message: "University deleted successfully"
-        });
-
-    } catch (error) {
-
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-
-    }
+    return res.status(403).json({
+        success: false,
+        message: "University administrators are not allowed to delete universities. Contact a super administrator."
+    });
 };

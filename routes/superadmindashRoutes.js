@@ -44,7 +44,7 @@ router.get(
 );
 
 router.post(
-    "/users/university-admin",
+    "/users/university_admin",
     auth,
     authorizeRoles("super_admin"),
     createUniversityAdmin
@@ -63,28 +63,28 @@ router.delete(
 // ======================================
 
 router.get(
-    "/universities",
+    "/university",
     auth,
     authorizeRoles("super_admin"),
     getAllUniversities
 );
 
 router.post(
-    "/universities",
+    "/university",
     auth,
     authorizeRoles("super_admin"),
     createUniversity
 );
 
 router.put(
-    "/universities/:id/verify",
+    "/university/:id/verify",
     auth,
     authorizeRoles("super_admin"),
     verifyUniversity
 );
 
 router.delete(
-    "/universities/:id",
+    "/university/:id",
     auth,
     authorizeRoles("super_admin"),
     deleteUniversity

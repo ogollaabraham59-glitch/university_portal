@@ -1,4 +1,5 @@
 const express = require("express");
+
 const router = express.Router();
 
 const {
@@ -9,8 +10,36 @@ const {
 
 const { auth, authorizeRoles } = require("../midllewear/auth");
 
-router.get("/dashboard", auth, authorizeRoles('university_admin', "super_admin"), universityDashboard);
-router.put("/update", auth, authorizeRoles('university_admin', "super_admin"), updateUniversity);
-router.delete("/delete", auth, authorizeRoles('super_admin'), deleteUniversity);
+// ======================================
+// UNIVERSITY ADMIN / SUPER ADMIN
+// ======================================
+
+// View university dashboard
+router.get(
+    "/dashboard",
+    auth,
+    authorizeRoles("university_admin", "super_admin"),
+    universityDashboard
+);
+
+// Update university
+router.put(
+    "/update",
+    auth,
+    authorizeRoles("university_admin", "super_admin"),
+    updateUniversity
+);
+
+// ======================================
+// SUPER ADMIN ONLY
+// ======================================
+
+// Delete university
+router.delete(
+    "/delete",
+    auth,
+    authorizeRoles("super_admin"),
+    deleteUniversity
+);
 
 module.exports = router;
