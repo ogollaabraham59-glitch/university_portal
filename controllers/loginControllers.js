@@ -1,8 +1,16 @@
-const { User } = require('../models/universityModel');
+const {
+    User,
+    UniversityAdmin
+} = require('../models/universityModel');
+
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-// Register normal user/student
+
+// ======================================================
+// REGISTER NORMAL USER / STUDENT
+// ======================================================
+
 exports.registerUser = async (req, res) => {
     try {
         const {
@@ -45,8 +53,7 @@ exports.registerUser = async (req, res) => {
             email,
             password: hashedPassword,
 
-            // IMPORTANT:
-            // Never allow the user to choose their role
+            // Never allow normal user to choose role
             role: "student",
 
             isVerified: true
@@ -74,7 +81,135 @@ exports.registerUser = async (req, res) => {
 };
 
 
-// Login
+// ======================================================
+// REGISTER UNIVERSITY ADMIN
+// ======================================================
+
+exports.registerUniversityAdmin = async (req, res) => {
+    try {
+
+        const {
+            name,
+            email,
+            phone,
+            password,
+            university
+        } = req.body;
+
+
+        // ----------------------------------------------
+        // Validate required fields
+        // ----------------------------------------------
+
+        if (
+            !name ||
+            !email ||
+            !phone ||
+            !password ||
+            !university
+        ) {
+            return res.status(400).json({
+                message:
+                    "Name, email, phone, password and university are required"
+            });
+        }
+
+
+        // ----------------------------------------------
+        // Check if email already exists
+        // ----------------------------------------------
+
+        const emailExists = await UniversityAdmin.findOne({
+            email
+        });
+
+        if (emailExists) {
+            return res.status(400).json({
+                message: "Email already exists"
+            });
+        }
+
+
+        // ----------------------------------------------
+        // Check if phone already exists
+        // ----------------------------------------------
+
+        const phoneExists = await UniversityAdmin.findOne({
+            phone
+        });
+
+        if (phoneExists) {
+            return res.status(400).json({
+                message: "Phone number already exists"
+            });
+        }
+
+
+        // ----------------------------------------------
+        // Hash password
+        // ----------------------------------------------
+
+        const hashedPassword = await bcrypt.hash(
+            password,
+            10
+        );
+
+
+        // ----------------------------------------------
+        // Create university admin
+        // ----------------------------------------------
+
+        const admin = new UniversityAdmin({
+            name,
+            email,
+            phone,
+            password: hashedPassword,
+
+            // University this admin manages
+            university,
+
+            // Admin created by super admin
+            isVerified: true,
+            isActive: true
+        });
+
+
+        const newAdmin = await admin.save();
+
+
+        // ----------------------------------------------
+        // Response
+        // ----------------------------------------------
+
+        res.status(201).json({
+            message: "University admin created successfully",
+
+            admin: {
+                id: newAdmin._id,
+                name: newAdmin.name,
+                email: newAdmin.email,
+                phone: newAdmin.phone,
+                university: newAdmin.university,
+                isVerified: newAdmin.isVerified,
+                isActive: newAdmin.isActive
+            }
+        });
+
+    } catch (error) {
+
+        res.status(500).json({
+            message: error.message
+        });
+
+    }
+};
+
+
+// ======================================================
+// LOGIN
+// This keeps your existing normal-user login unchanged.
+// ======================================================
+
 exports.logIn = async (req, res) => {
     try {
 
@@ -97,7 +232,10 @@ exports.logIn = async (req, res) => {
         }
 
         // Compare passwords
-        const isMatch = await bcrypt.compare(password, user.password);
+        const isMatch = await bcrypt.compare(
+            password,
+            user.password
+        );
 
         if (!isMatch) {
             return res.status(401).json({
@@ -131,8 +269,10 @@ exports.logIn = async (req, res) => {
         });
 
     } catch (error) {
+
         res.status(500).json({
             message: error.message
         });
+
     }
 };

@@ -2,7 +2,9 @@ const {
     User,
     University,
     Course,
-    Profile
+    Profile,
+    UniversityAdmin
+
 } = require("../models/universityModel");
 
 const bcrypt = require("bcrypt");
@@ -118,7 +120,6 @@ exports.getAllUsers = async (req, res) => {
     }
 };
 
-
 // ======================================
 // Create University Admin
 // ======================================
@@ -133,17 +134,26 @@ exports.createUniversityAdmin = async (req, res) => {
             name,
             email,
             password,
+            phone,
             university
         } = req.body;
 
+
         // Validate fields
-        if (!name || !email || !password || !university) {
+        if (
+            !name ||
+            !email ||
+            !password ||
+            !phone ||
+            !university
+        ) {
             return res.status(400).json({
                 success: false,
                 message:
-                    "Name, email, password and university are required"
+                    "Name, email, password, phone and university are required"
             });
         }
+
 
         // Check university
         const universityExists = await University.findById(
@@ -157,46 +167,95 @@ exports.createUniversityAdmin = async (req, res) => {
             });
         }
 
-        // Check email
-        const existingUser = await User.findOne({
+
+        // Check if email already exists
+        const existingAdmin = await UniversityAdmin.findOne({
             email: email.toLowerCase()
         });
 
-        if (existingUser) {
+        if (existingAdmin) {
             return res.status(409).json({
                 success: false,
                 message: "Email is already registered"
             });
         }
 
+
+        // Check if phone already exists
+        const existingPhone = await UniversityAdmin.findOne({
+            phone
+        });
+
+        if (existingPhone) {
+            return res.status(409).json({
+                success: false,
+                message: "Phone number is already registered"
+            });
+        }
+
+
         // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(
+            password,
+            10
+        );
 
-        // Create admin
-        const newAdmin = await User.create({
+
+        // Create university admin
+        const newAdmin = await UniversityAdmin.create({
+
             name,
+
             email: email.toLowerCase(),
+
             password: hashedPassword,
-            role: "university_admin",
-            university
+
+            phone,
+
+            university,
+
+            isVerified: true,
+
+            isActive: true
+
         });
 
+
+        // Response
         res.status(201).json({
-            success: true,
-            message: "University admin created successfully",
 
-            user: {
+            success: true,
+
+            message:
+                "University admin created successfully",
+
+            admin: {
+
                 id: newAdmin._id,
+
                 name: newAdmin.name,
+
                 email: newAdmin.email,
-                role: newAdmin.role,
-                university: newAdmin.university
+
+                phone: newAdmin.phone,
+
+                university: newAdmin.university,
+
+                isVerified: newAdmin.isVerified,
+
+                isActive: newAdmin.isActive
+
             }
+
         });
+
 
     } catch (error) {
 
-        console.error("Create University Admin Error:", error);
+        console.error(
+            "Create University Admin Error:",
+            error
+        );
 
         res.status(500).json({
             success: false,
@@ -204,53 +263,6 @@ exports.createUniversityAdmin = async (req, res) => {
         });
     }
 };
-
-
-// ======================================
-// Delete User
-// ======================================
-exports.deleteUser = async (req, res) => {
-    try {
-
-        const isSuperAdmin = await checkSuperAdmin(req, res);
-
-        if (!isSuperAdmin) return;
-
-        const user = await User.findById(req.params.id);
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found"
-            });
-        }
-
-        // Protect super admins
-        if (user.role === "super_admin") {
-            return res.status(403).json({
-                success: false,
-                message: "You cannot delete a super admin"
-            });
-        }
-
-        await User.findByIdAndDelete(req.params.id);
-
-        res.status(200).json({
-            success: true,
-            message: "User deleted successfully"
-        });
-
-    } catch (error) {
-
-        console.error("Delete User Error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
 
 // ======================================
 // Create University
