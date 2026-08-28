@@ -1,45 +1,84 @@
 const express = require("express");
+
 const router = express.Router();
 
-const courseController = require("../controllers/courseController");
-const { auth, authorizeRoles } = require("../midllewear/auth");
+const {
+    createCourse,
+    getCourses,
+    getCourseById,
+    updateCourse,
+    deleteCourse,
+    getCoursesByUniversity,
+    searchCourses
+} = require("../controllers/courseController");
 
-// Create Course
+const {
+    auth,
+    authorizeRoles
+} = require("../midllewear/auth");
+
+
+// ======================================================
+// PUBLIC ROUTES
+// ======================================================
+
+// Get all courses
+router.get(
+    "/",
+    getCourses
+);
+
+
+// Search courses
+router.get(
+    "/search",
+    searchCourses
+);
+
+
+// Get courses belonging to a university
+router.get(
+    "/university/:universityId",
+    getCoursesByUniversity
+);
+
+
+// Get one course
+router.get(
+    "/:id",
+    getCourseById
+);
+
+
+// ======================================================
+// UNIVERSITY ADMIN / SUPER ADMIN
+// ======================================================
+
+// Create course
 router.post(
     "/",
     auth,
     authorizeRoles("university_admin", "super_admin"),
-    courseController.addCourse
+    createCourse
 );
 
-// Get All Courses
-router.get(
-    "/",
-    auth,
-    courseController.getAllCourses
-);
 
-// Get Course By Id
-router.get(
-    "/:id",
-    auth,
-    courseController.getCourseById
-);
-
-// Update Course
+// Update course
 router.put(
     "/:id",
     auth,
     authorizeRoles("university_admin", "super_admin"),
-    courseController.updateCourse
+    updateCourse
 );
 
-// Delete Course
+
+// Delete course
 router.delete(
     "/:id",
     auth,
-    authorizeRoles("university_admin"),
-    courseController.deleteCourse
+    authorizeRoles("university_admin", "super_admin"),
+    deleteCourse
 );
+
 
 module.exports = router;

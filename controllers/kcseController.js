@@ -1,170 +1,463 @@
-const { KcseResult, User } = require("../models/universityModel");
+const {
+    KcseResult,
+    Student
+} = require("../models/universityModel");
 
-// =========================
-// Create KCSE Result
-// =========================
-exports.addKcseResult = async (req, res) => {
+
+// ======================================================
+// 1. UPLOAD KCSE RESULT SLIP
+// ======================================================
+
+const uploadResultSlip = async (req, res) => {
     try {
+        // ------------------------------------------
+        // Student ID comes from JWT
+        // ------------------------------------------
 
-        const {
-            student,
-            resultSlip,
-            extractedSubjects
-        } = req.body;
+        const studentId = req.user.id;
 
-        // Check if student exists
-        const studentExist = await User.findById(student);
+        // ------------------------------------------
+        // Get uploaded file
+        // ------------------------------------------
 
-        if (!studentExist) {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: "Please upload your KCSE result slip"
+            });
+        }
+
+        // ------------------------------------------
+        // Check student
+        // ------------------------------------------
+
+        const student = await Student.findById(studentId);
+
+        if (!student) {
             return res.status(404).json({
+                success: false,
                 message: "Student not found"
             });
         }
 
-        // Prevent duplicate result
-        const existingResult = await KcseResult.findOne({ student });
+        // ------------------------------------------
+        // Check for existing result
+        // ------------------------------------------
+
+        const existingResult = await Kcse.findOne({
+            student: studentId
+        });
 
         if (existingResult) {
-            return res.status(400).json({
-                message: "KCSE result already uploaded."
+            return res.status(409).json({
+                success: false,
+                message: "KCSE result has already been uploaded",
+                result: existingResult
             });
         }
 
-        const newResult = new KcseResult({
-            student,
+        // ------------------------------------------
+        // File path
+        // ------------------------------------------
+
+        const resultSlip = req.file.path;
+
+        // ------------------------------------------
+        // Create result
+        // ------------------------------------------
+
+        const result = await Kcse.create({
+            student: studentId,
             resultSlip,
-            extractedSubjects,
-            status: "Pending"
+            status: "Pending",
+            extractedSubjects: []
         });
 
-        const savedResult = await newResult.save();
-
-        res.status(201).json(savedResult);
+        return res.status(201).json({
+            success: true,
+            message:
+                "KCSE result slip uploaded successfully and is waiting for processing",
+            result
+        });
 
     } catch (error) {
+        console.error("Upload KCSE result error:", error);
 
-        res.status(500).json({
-            message: error.message
+        return res.status(500).json({
+            success: false,
+            message: "Server error while uploading KCSE result",
+            error: error.message
         });
-
     }
 };
 
-// =========================
-// Get All Results
-// =========================
-exports.getAllKcseResults = async (req, res) => {
 
+// ======================================================
+// 2. GET MY KCSE RESULT
+// ======================================================
+
+const getMyResult = async (req, res) => {
     try {
+        // ------------------------------------------
+        // Get logged-in student ID from JWT
+        // ------------------------------------------
 
-        const results = await KcseResult.find()
-            .populate("student");
+        const studentId = req.user.id;
 
-        res.status(200).json(results);
-
-    } catch (error) {
-
-        res.status(500).json({
-            message: error.message
-        });
-
-    }
-
-};
-
-// =========================
-// Get Result By ID
-// =========================
-exports.getKcseResultById = async (req, res) => {
-
-    try {
-
-        const result = await KcseResult.findById(req.params.id)
-            .populate("student");
+        const result = await Kcse.findOne({
+            student: studentId
+        }).populate(
+            "student",
+            "firstName lastName email phone indexNo yearOfCompletion"
+        );
 
         if (!result) {
-
             return res.status(404).json({
-                message: "KCSE Result not found"
+                success: false,
+                message: "You have not uploaded a KCSE result"
             });
-
         }
 
-        res.status(200).json(result);
-
-    } catch (error) {
-
-        res.status(500).json({
-            message: error.message
+        return res.status(200).json({
+            success: true,
+            result
         });
 
-    }
+    } catch (error) {
+        console.error("Get my KCSE result error:", error);
 
+        return res.status(500).json({
+            success: false,
+            message: "Server error while getting your KCSE result",
+            error: error.message
+        });
+    }
 };
 
-// =========================
-// Update Result
-// =========================
-exports.updateKcseResult = async (req, res) => {
 
+// ======================================================
+// 3. GET RESULT BY ID
+// ======================================================
+
+const getResultById = async (req, res) => {
     try {
+        const { id } = req.params;
 
-        const updatedResult = await KcseResult.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            {
-                new: true,
-                runValidators: true
+        const result = await Kcse.findById(id)
+            .populate(
+                "student",
+                "firstName lastName email phone indexNo yearOfCompletion"
+            );
+
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: "KCSE result not found"
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            result
+        });
+
+    } catch (error) {
+        console.error("Get KCSE result error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error while getting KCSE result",
+            error: error.message
+        });
+    }
+};
+
+
+// ======================================================
+// 4. PROCESS KCSE RESULT
+// ======================================================
+
+const processResult = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const {
+            extractedSubjects
+        } = req.body;
+
+        // ------------------------------------------
+        // Find result
+        // ------------------------------------------
+
+        const result = await Kcse.findById(id);
+
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: "KCSE result not found"
+            });
+        }
+
+        // ------------------------------------------
+        // Validate subjects
+        // ------------------------------------------
+
+        if (
+            !extractedSubjects ||
+            !Array.isArray(extractedSubjects)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Extracted subjects must be provided as an array"
+            });
+        }
+
+        // ------------------------------------------
+        // Save extracted subjects
+        // ------------------------------------------
+
+        result.extractedSubjects = extractedSubjects;
+
+        // ------------------------------------------
+        // Mark as processed
+        // ------------------------------------------
+
+        result.status = "Processed";
+
+        await result.save();
+
+        // ------------------------------------------
+        // Return populated result
+        // ------------------------------------------
+
+        const processedResult = await Kcse.findById(id)
+            .populate(
+                "student",
+                "firstName lastName email indexNo yearOfCompletion"
+            );
+
+        return res.status(200).json({
+            success: true,
+            message: "KCSE result processed successfully",
+            result: processedResult
+        });
+
+    } catch (error) {
+        console.error("Process KCSE result error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error while processing KCSE result",
+            error: error.message
+        });
+    }
+};
+
+
+// ======================================================
+// 5. UPDATE KCSE RESULT
+// ======================================================
+
+const updateResult = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const {
+            resultSlip,
+            extractedSubjects,
+            status
+        } = req.body;
+
+        // ------------------------------------------
+        // Find result
+        // ------------------------------------------
+
+        const result = await Kcse.findById(id);
+
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: "KCSE result not found"
+            });
+        }
+
+        // ------------------------------------------
+        // Update result slip
+        // ------------------------------------------
+
+        if (resultSlip !== undefined) {
+            result.resultSlip = resultSlip;
+        }
+
+        // ------------------------------------------
+        // Update extracted subjects
+        // ------------------------------------------
+
+        if (extractedSubjects !== undefined) {
+
+            if (!Array.isArray(extractedSubjects)) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Extracted subjects must be an array"
+                });
             }
-        ).populate("student");
 
-        if (!updatedResult) {
-
-            return res.status(404).json({
-                message: "KCSE Result not found"
-            });
-
+            result.extractedSubjects = extractedSubjects;
         }
 
-        res.status(200).json(updatedResult);
+        // ------------------------------------------
+        // Update status
+        // ------------------------------------------
 
-    } catch (error) {
+        if (status !== undefined) {
 
-        res.status(500).json({
-            message: error.message
+            if (
+                !["Pending", "Processed"].includes(status)
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Status must be Pending or Processed"
+                });
+            }
+
+            result.status = status;
+        }
+
+        await result.save();
+
+        const updatedResult = await Kcse.findById(id)
+            .populate(
+                "student",
+                "firstName lastName email indexNo yearOfCompletion"
+            );
+
+        return res.status(200).json({
+            success: true,
+            message: "KCSE result updated successfully",
+            result: updatedResult
         });
 
-    }
+    } catch (error) {
+        console.error("Update KCSE result error:", error);
 
+        return res.status(500).json({
+            success: false,
+            message: "Server error while updating KCSE result",
+            error: error.message
+        });
+    }
 };
 
-// =========================
-// Delete Result
-// =========================
-exports.deleteKcseResult = async (req, res) => {
 
+// ======================================================
+// 6. DELETE KCSE RESULT
+// ======================================================
+
+const deleteResult = async (req, res) => {
     try {
+        const { id } = req.params;
 
-        const deletedResult = await KcseResult.findByIdAndDelete(req.params.id);
+        const result = await Kcse.findById(id);
 
-        if (!deletedResult) {
-
+        if (!result) {
             return res.status(404).json({
-                message: "KCSE Result not found"
+                success: false,
+                message: "KCSE result not found"
             });
-
         }
 
-        res.status(200).json({
-            message: "KCSE Result deleted successfully"
+        await Kcse.findByIdAndDelete(id);
+
+        return res.status(200).json({
+            success: true,
+            message: "KCSE result deleted successfully"
         });
 
     } catch (error) {
+        console.error("Delete KCSE result error:", error);
 
-        res.status(500).json({
-            message: error.message
+        return res.status(500).json({
+            success: false,
+            message: "Server error while deleting KCSE result",
+            error: error.message
+        });
+    }
+};
+
+
+// ======================================================
+// 7. RETRY KCSE RESULT PROCESSING
+// ======================================================
+
+const retryProcessing = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const result = await Kcse.findById(id);
+
+        if (!result) {
+            return res.status(404).json({
+                success: false,
+                message: "KCSE result not found"
+            });
+        }
+
+        // ------------------------------------------
+        // Reset processing state
+        // ------------------------------------------
+
+        result.status = "Pending";
+        result.extractedSubjects = [];
+
+        await result.save();
+
+        /*
+         * At this point you would normally send the
+         * result slip to your OCR/AI processing service.
+         *
+         * Example:
+         *
+         * await processKcseDocument(result.resultSlip);
+         *
+         * The processing service would then update:
+         *
+         * extractedSubjects
+         * status = "Processed"
+         */
+
+        return res.status(200).json({
+            success: true,
+            message:
+                "KCSE result has been queued for processing",
+            result
         });
 
-    }
+    } catch (error) {
+        console.error("Retry KCSE processing error:", error);
 
+        return res.status(500).json({
+            success: false,
+            message:
+                "Server error while retrying KCSE result processing",
+            error: error.message
+        });
+    }
+};
+
+
+// ======================================================
+// EXPORT
+// ======================================================
+
+module.exports = {
+    uploadResultSlip,
+    getMyResult,
+    getResultById,
+    processResult,
+    updateResult,
+    deleteResult,
+    retryProcessing
 };

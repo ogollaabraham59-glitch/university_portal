@@ -1,45 +1,95 @@
 const express = require("express");
+
 const router = express.Router();
 
-const kcseResultController = require("../controllers/kcseController");
-const { auth, authorizeRoles } = require("../midllewear/auth");
+const {
+    uploadResultSlip,
+    getMyResult,
+    getResultById,
+    processResult,
+    updateResult,
+    deleteResult,
+    retryProcessing
+} = require("../controllers/kcseController");
 
-// Upload KCSE Result
+const {
+    auth,
+    authorizeRoles
+} = require("../midllewear/auth");
+
+
+
+
+// ======================================================
+// STUDENT ROUTES
+// ======================================================
+
+// Upload my KCSE result
 router.post(
-    "/",
+    "/upload",
     auth,
-    authorizeRoles("student", "university_admin", "super_admin"),
-    kcseResultController.addKcseResult
+    authorizeRoles("student"),
+
+    uploadResultSlip
 );
 
-// Get All Results
+
+// Get my KCSE result
 router.get(
-    "/",
+    "/my-result",
     auth,
-    kcseResultController.getAllKcseResults
+    authorizeRoles("student"),
+    getMyResult
 );
 
-// Get Result By ID
-router.get(
-    "/:id",
-    auth, authorizeRoles("university_admin", "super-admin"),
-    kcseResultController.getKcseResultById
-);
 
-// Update Result
-router.put(
-    "/:id",
-    auth,
-    authorizeRoles("university_admin", "super_admin"),
-    kcseResultController.updateKcseResult
-);
-
-// Delete Result
+// Delete my result
 router.delete(
     "/:id",
     auth,
-    authorizeRoles("university_admin", "super_admin"),
-    kcseResultController.deleteKcseResult
+    authorizeRoles("student"),
+    deleteResult
 );
+
+
+// ======================================================
+// ADMIN ROUTES
+// ======================================================
+
+// Get result by ID
+router.get(
+    "/:id",
+    auth,
+    authorizeRoles("super_admin", "university_admin"),
+    getResultById
+);
+
+
+// Process result
+router.put(
+    "/:id/process",
+    auth,
+    authorizeRoles("super_admin"),
+    processResult
+);
+
+
+// Update result
+router.put(
+    "/:id",
+    auth,
+    authorizeRoles("super_admin"),
+    updateResult
+);
+
+
+// Retry processing
+router.put(
+    "/:id/retry",
+    auth,
+    authorizeRoles("super_admin"),
+    retryProcessing
+);
+
 
 module.exports = router;

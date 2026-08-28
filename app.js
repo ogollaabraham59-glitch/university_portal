@@ -10,11 +10,14 @@ app.use(cors())
 const universityRoutes = require('./routes/universityRouters')
 const loginRoutes = require('./routes/loginRoutes')
 const courseRoutes = require('./routes/courseRoutes')
-const studentRoutes = require('./routes/studentsRoutes')
+const studentRoutes = require('./routes/studentsRoute')
 const kcseRoutes = require('./routes/kcseRoutes')
-const studentDashboard = require('./routes/studentDashRoutes')
-const universitydashRoute = require('./routes/universitydashRoutes')
-const superadmin = require('./routes/superadmindashRoutes')
+const universityCourse = require('./routes/universityCourseRouter')
+const courseCategory = require('./routes/courseCategoryRoute')
+const savedRoutes = require('./routes/savedRoutes')
+const notification = require('./routes/notificationRoute')
+const eligibilityibility = require('./routes/eligibilityRoute')
+
 
 
 app.use('/api/university', universityRoutes)
@@ -22,9 +25,13 @@ app.use('/api/login', loginRoutes)
 app.use('/api/student', studentRoutes)
 app.use('/api/kcse', kcseRoutes)
 app.use('/api/course', courseRoutes)
-app.use('/api/studentdash', studentDashboard)
-app.use('/api/universitydash', universitydashRoute)
-app.use('/api/superadmin', superadmin)
+app.use('/api/saved', savedRoutes)
+app.use('/api/notification', notification)
+app.use('/api/coursecategory', courseCategory)
+app.use('/api/universitycourse', universityCourse)
+app.use('/api/eligibility', eligibilityibility)
+
+
 
 
 
