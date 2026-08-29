@@ -1,9 +1,10 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const JWT_SECRET = process.env.JWT_SECRET
 
 const { User, Student } = require("../models/universityModel");
 
-const JWT_SECRET = process.env.JWT_SECRET;
+
 
 // ======================================================
 // HELPER: GENERATE JWT TOKEN
