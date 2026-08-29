@@ -1,4 +1,4 @@
-const { Course, University } = require("../models/universityModel");
+const { Course, University, UniversityCourse } = require("../models/universityModel");
 
 
 // ======================================================
@@ -10,31 +10,40 @@ const createCourse = async (req, res) => {
         const {
             university,
             courseName,
+            courseCode,
+            description,
             duration,
-            annualFees,
-            minimumGrade,
             department,
-            mode
+            category,
+            minimumGrade,
+            requirements,
+            mode,
+
+            // UniversityCourse information
+            campus,
+            annualFees,
+            applicationFee,
+            intake,
+            applicationLink
         } = req.body;
 
-        // ------------------------------------------
-        // Validate required fields
-        // ------------------------------------------
+        // ==========================================
+        // VALIDATION
+        // ==========================================
 
-        if (!university || !courseName) {
+        if (!university || !courseName || !minimumGrade) {
             return res.status(400).json({
                 success: false,
-                message: "University and course name are required"
+                message:
+                    "University, course name and minimum grade are required"
             });
         }
 
-        // ------------------------------------------
-        // Check university
-        // ------------------------------------------
+        // ==========================================
+        // CHECK UNIVERSITY
+        // ==========================================
 
-        const universityExists = await University.findById(
-            university
-        );
+        const universityExists = await University.findById(university);
 
         if (!universityExists) {
             return res.status(404).json({
@@ -43,55 +52,98 @@ const createCourse = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
-        // Check duplicate course
-        // ------------------------------------------
+        // ==========================================
+        // CHECK IF COURSE ALREADY EXISTS
+        // ==========================================
 
         const existingCourse = await Course.findOne({
-            university,
             courseName: courseName.trim()
         });
 
+        // If course exists, use the existing course
+        let course;
+
         if (existingCourse) {
-            return res.status(409).json({
-                success: false,
-                message:
-                    "This course already exists in this university"
+            course = existingCourse;
+        } else {
+
+            // ==========================================
+            // CREATE COURSE
+            // ==========================================
+
+            course = await Course.create({
+                courseName: courseName.trim(),
+                courseCode,
+                description,
+                duration,
+                department,
+                category,
+                minimumGrade,
+                requirements,
+                mode
             });
         }
 
-        // ------------------------------------------
-        // Create course
-        // ------------------------------------------
+        // ==========================================
+        // CHECK UNIVERSITY-COURSE RELATIONSHIP
+        // ==========================================
 
-        const course = await Course.create({
+        const existingUniversityCourse =
+            await UniversityCourse.findOne({
+                university,
+                course: course._id
+            });
+
+        if (existingUniversityCourse) {
+            return res.status(409).json({
+                success: false,
+                message:
+                    "This course is already offered by this university"
+            });
+        }
+
+        // ==========================================
+        // CONNECT COURSE TO UNIVERSITY
+        // ==========================================
+
+        const universityCourse = await UniversityCourse.create({
             university,
-            courseName: courseName.trim(),
-            duration,
+            course: course._id,
+            campus,
             annualFees,
-            minimumGrade,
-            department,
-            mode
+            applicationFee,
+            mode,
+            intake,
+            applicationLink
         });
 
-        // ------------------------------------------
-        // Return populated course
-        // ------------------------------------------
+        // ==========================================
+        // GET COMPLETE RESULT
+        // ==========================================
 
-        const populatedCourse = await Course.findById(
-            course._id
-        ).populate(
-            "university",
-            "name location county website logo"
-        );
+        const result = await UniversityCourse
+            .findById(universityCourse._id)
+            .populate(
+                "university",
+                "name location county country website logo"
+            )
+            .populate(
+                "course"
+            );
+
+        // ==========================================
+        // SUCCESS
+        // ==========================================
 
         return res.status(201).json({
             success: true,
-            message: "Course created successfully",
-            course: populatedCourse
+            message:
+                "Course created and assigned to university successfully",
+            course: result
         });
 
     } catch (error) {
+
         console.error("Create course error:", error);
 
         return res.status(500).json({
