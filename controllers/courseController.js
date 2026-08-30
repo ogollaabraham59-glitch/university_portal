@@ -1,4 +1,37 @@
-const { Course, University, UniversityCourse } = require("../models/universityModel");
+const {
+    Course,
+    University,
+    UniversityCourse
+} = require("../models/universityModel");
+
+
+// ======================================================
+// HELPER: GET COURSE WITH UNIVERSITY OFFERINGS
+// ======================================================
+
+const getCourseWithOfferings = async (courseId) => {
+    const course = await Course.findById(courseId)
+        .populate("category", "name description");
+
+    if (!course) {
+        return null;
+    }
+
+    const offerings = await UniversityCourse.find({
+        course: courseId,
+        isAvailable: true
+    })
+        .populate(
+            "university",
+            "name location county country website email phone logo"
+        )
+        .sort({ annualFees: 1 });
+
+    return {
+        ...course.toObject(),
+        universities: offerings
+    };
+};
 
 
 // ======================================================
@@ -7,6 +40,7 @@ const { Course, University, UniversityCourse } = require("../models/universityMo
 
 const createCourse = async (req, res) => {
     try {
+
         const {
             university,
             courseName,
@@ -27,6 +61,7 @@ const createCourse = async (req, res) => {
             applicationLink
         } = req.body;
 
+
         // ==========================================
         // VALIDATION
         // ==========================================
@@ -39,11 +74,13 @@ const createCourse = async (req, res) => {
             });
         }
 
+
         // ==========================================
         // CHECK UNIVERSITY
         // ==========================================
 
-        const universityExists = await University.findById(university);
+        const universityExists =
+            await University.findById(university);
 
         if (!universityExists) {
             return res.status(404).json({
@@ -52,24 +89,21 @@ const createCourse = async (req, res) => {
             });
         }
 
+
         // ==========================================
         // CHECK IF COURSE ALREADY EXISTS
         // ==========================================
 
-        const existingCourse = await Course.findOne({
+        let course = await Course.findOne({
             courseName: courseName.trim()
         });
 
-        // If course exists, use the existing course
-        let course;
 
-        if (existingCourse) {
-            course = existingCourse;
-        } else {
+        // ==========================================
+        // CREATE COURSE IF IT DOES NOT EXIST
+        // ==========================================
 
-            // ==========================================
-            // CREATE COURSE
-            // ==========================================
+        if (!course) {
 
             course = await Course.create({
                 courseName: courseName.trim(),
@@ -82,7 +116,47 @@ const createCourse = async (req, res) => {
                 requirements,
                 mode
             });
+
+        } else {
+
+            // Optional: update general course information
+            // when the course already exists.
+
+            if (courseCode !== undefined) {
+                course.courseCode = courseCode;
+            }
+
+            if (description !== undefined) {
+                course.description = description;
+            }
+
+            if (duration !== undefined) {
+                course.duration = duration;
+            }
+
+            if (department !== undefined) {
+                course.department = department;
+            }
+
+            if (category !== undefined) {
+                course.category = category;
+            }
+
+            if (minimumGrade !== undefined) {
+                course.minimumGrade = minimumGrade;
+            }
+
+            if (requirements !== undefined) {
+                course.requirements = requirements;
+            }
+
+            if (mode !== undefined) {
+                course.mode = mode;
+            }
+
+            await course.save();
         }
+
 
         // ==========================================
         // CHECK UNIVERSITY-COURSE RELATIONSHIP
@@ -102,34 +176,40 @@ const createCourse = async (req, res) => {
             });
         }
 
+
         // ==========================================
-        // CONNECT COURSE TO UNIVERSITY
+        // CREATE UNIVERSITY-COURSE RELATIONSHIP
         // ==========================================
 
-        const universityCourse = await UniversityCourse.create({
-            university,
-            course: course._id,
-            campus,
-            annualFees,
-            applicationFee,
-            mode,
-            intake,
-            applicationLink
-        });
+        const universityCourse =
+            await UniversityCourse.create({
+                university,
+                course: course._id,
+                campus,
+                annualFees,
+                applicationFee,
+                mode,
+                intake,
+                applicationLink
+            });
+
 
         // ==========================================
         // GET COMPLETE RESULT
         // ==========================================
 
-        const result = await UniversityCourse
-            .findById(universityCourse._id)
-            .populate(
-                "university",
-                "name location county country website logo"
+        const result =
+            await UniversityCourse.findById(
+                universityCourse._id
             )
-            .populate(
-                "course"
-            );
+                .populate(
+                    "university",
+                    "name location county country website email phone logo"
+                )
+                .populate(
+                    "course"
+                );
+
 
         // ==========================================
         // SUCCESS
@@ -144,11 +224,15 @@ const createCourse = async (req, res) => {
 
     } catch (error) {
 
-        console.error("Create course error:", error);
+        console.error(
+            "Create course error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Server error while creating course",
+            message:
+                "Server error while creating course",
             error: error.message
         });
     }
@@ -162,27 +246,71 @@ const createCourse = async (req, res) => {
 const getCourses = async (req, res) => {
     try {
 
+        // Get all courses
         const courses = await Course.find()
             .populate(
-                "university",
-                "name location county website logo"
+                "category",
+                "name description"
             )
             .sort({
                 courseName: 1
             });
 
+
+        // Get university offerings
+        const courseIds = courses.map(
+            course => course._id
+        );
+
+        const offerings =
+            await UniversityCourse.find({
+                course: { $in: courseIds }
+            })
+                .populate(
+                    "university",
+                    "name location county country website logo"
+                )
+                .sort({
+                    annualFees: 1
+                });
+
+
+        // Attach universities to each course
+        const coursesWithUniversities =
+            courses.map(course => {
+
+                const universityOfferings =
+                    offerings.filter(
+                        offering =>
+                            offering.course.toString() ===
+                            course._id.toString()
+                    );
+
+                return {
+                    ...course.toObject(),
+                    universities:
+                        universityOfferings
+                };
+            });
+
+
         return res.status(200).json({
             success: true,
-            count: courses.length,
-            courses
+            count: coursesWithUniversities.length,
+            courses: coursesWithUniversities
         });
 
     } catch (error) {
-        console.error("Get courses error:", error);
+
+        console.error(
+            "Get courses error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Server error while getting courses",
+            message:
+                "Server error while getting courses",
             error: error.message
         });
     }
@@ -195,13 +323,20 @@ const getCourses = async (req, res) => {
 
 const getCourseById = async (req, res) => {
     try {
+
         const { id } = req.params;
+
+
+        // ==========================================
+        // GET COURSE
+        // ==========================================
 
         const course = await Course.findById(id)
             .populate(
-                "university",
-                "name location county website email phone logo"
+                "category",
+                "name description"
             );
+
 
         if (!course) {
             return res.status(404).json({
@@ -210,17 +345,50 @@ const getCourseById = async (req, res) => {
             });
         }
 
+
+        // ==========================================
+        // GET UNIVERSITIES OFFERING COURSE
+        // ==========================================
+
+        const universityCourses =
+            await UniversityCourse.find({
+                course: id
+            })
+                .populate(
+                    "university",
+                    "name location county country website email phone logo"
+                )
+                .sort({
+                    annualFees: 1
+                });
+
+
+        // ==========================================
+        // RESPONSE
+        // ==========================================
+
         return res.status(200).json({
             success: true,
-            course
+
+            course: {
+                ...course.toObject(),
+
+                universities:
+                    universityCourses
+            }
         });
 
     } catch (error) {
-        console.error("Get course by ID error:", error);
+
+        console.error(
+            "Get course by ID error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Server error while getting course",
+            message:
+                "Server error while getting course",
             error: error.message
         });
     }
@@ -233,23 +401,28 @@ const getCourseById = async (req, res) => {
 
 const updateCourse = async (req, res) => {
     try {
+
         const { id } = req.params;
 
         const {
-            university,
             courseName,
+            courseCode,
+            description,
             duration,
-            annualFees,
-            minimumGrade,
             department,
+            category,
+            minimumGrade,
+            requirements,
             mode
         } = req.body;
 
-        // ------------------------------------------
-        // Find existing course
-        // ------------------------------------------
 
-        const course = await Course.findById(id);
+        // ==========================================
+        // FIND COURSE
+        // ==========================================
+
+        const course =
+            await Course.findById(id);
 
         if (!course) {
             return res.status(404).json({
@@ -258,111 +431,154 @@ const updateCourse = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
-        // University change
-        // ------------------------------------------
 
-        if (
-            university !== undefined &&
-            university.toString() !==
-            course.university.toString()
-        ) {
-
-            const universityExists =
-                await University.findById(university);
-
-            if (!universityExists) {
-                return res.status(404).json({
-                    success: false,
-                    message: "University not found"
-                });
-            }
-
-            course.university = university;
-        }
-
-        // ------------------------------------------
-        // Course name
-        // ------------------------------------------
+        // ==========================================
+        // UPDATE COURSE INFORMATION
+        // ==========================================
 
         if (courseName !== undefined) {
 
             if (!courseName.trim()) {
                 return res.status(400).json({
                     success: false,
-                    message: "Course name cannot be empty"
+                    message:
+                        "Course name cannot be empty"
                 });
             }
 
-            course.courseName = courseName.trim();
+            course.courseName =
+                courseName.trim();
         }
 
-        // ------------------------------------------
-        // Other fields
-        // ------------------------------------------
+
+        if (courseCode !== undefined) {
+            course.courseCode =
+                courseCode;
+        }
+
+
+        if (description !== undefined) {
+            course.description =
+                description;
+        }
+
 
         if (duration !== undefined) {
-            course.duration = duration;
+            course.duration =
+                duration;
         }
 
-        if (annualFees !== undefined) {
-            course.annualFees = annualFees;
-        }
-
-        if (minimumGrade !== undefined) {
-            course.minimumGrade = minimumGrade;
-        }
 
         if (department !== undefined) {
-            course.department = department;
+            course.department =
+                department;
         }
+
+
+        if (category !== undefined) {
+            course.category =
+                category;
+        }
+
+
+        if (minimumGrade !== undefined) {
+            course.minimumGrade =
+                minimumGrade;
+        }
+
+
+        if (requirements !== undefined) {
+            course.requirements =
+                requirements;
+        }
+
 
         if (mode !== undefined) {
-            course.mode = mode;
+            course.mode =
+                mode;
         }
 
-        // ------------------------------------------
-        // Prevent duplicate course
-        // ------------------------------------------
 
-        const duplicateCourse = await Course.findOne({
-            university: course.university,
-            courseName: course.courseName,
-            _id: { $ne: id }
-        });
+        // ==========================================
+        // CHECK DUPLICATE COURSE NAME
+        // ==========================================
 
-        if (duplicateCourse) {
-            return res.status(409).json({
-                success: false,
-                message:
-                    "This course already exists in this university"
-            });
+        if (courseName !== undefined) {
+
+            const duplicateCourse =
+                await Course.findOne({
+                    courseName:
+                        course.courseName,
+                    _id: { $ne: id }
+                });
+
+            if (duplicateCourse) {
+                return res.status(409).json({
+                    success: false,
+                    message:
+                        "A course with this name already exists"
+                });
+            }
         }
+
+
+        // ==========================================
+        // SAVE
+        // ==========================================
 
         await course.save();
 
-        // ------------------------------------------
-        // Populate university
-        // ------------------------------------------
 
-        const updatedCourse = await Course.findById(id)
-            .populate(
-                "university",
-                "name location county website logo"
-            );
+        // ==========================================
+        // GET UPDATED COURSE
+        // ==========================================
+
+        const updatedCourse =
+            await Course.findById(id)
+                .populate(
+                    "category",
+                    "name description"
+                );
+
+
+        // ==========================================
+        // GET UNIVERSITY OFFERINGS
+        // ==========================================
+
+        const universityCourses =
+            await UniversityCourse.find({
+                course: id
+            })
+                .populate(
+                    "university",
+                    "name location county country website email phone logo"
+                );
+
 
         return res.status(200).json({
             success: true,
-            message: "Course updated successfully",
-            course: updatedCourse
+            message:
+                "Course updated successfully",
+
+            course: {
+                ...updatedCourse.toObject(),
+
+                universities:
+                    universityCourses
+            }
         });
 
     } catch (error) {
-        console.error("Update course error:", error);
+
+        console.error(
+            "Update course error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Server error while updating course",
+            message:
+                "Server error while updating course",
             error: error.message
         });
     }
@@ -375,30 +591,59 @@ const updateCourse = async (req, res) => {
 
 const deleteCourse = async (req, res) => {
     try {
+
         const { id } = req.params;
 
-        const course = await Course.findById(id);
+
+        // ==========================================
+        // FIND COURSE
+        // ==========================================
+
+        const course =
+            await Course.findById(id);
 
         if (!course) {
             return res.status(404).json({
                 success: false,
-                message: "Course not found"
+                message:
+                    "Course not found"
             });
         }
 
+
+        // ==========================================
+        // DELETE UNIVERSITY RELATIONSHIPS
+        // ==========================================
+
+        await UniversityCourse.deleteMany({
+            course: id
+        });
+
+
+        // ==========================================
+        // DELETE COURSE
+        // ==========================================
+
         await Course.findByIdAndDelete(id);
+
 
         return res.status(200).json({
             success: true,
-            message: "Course deleted successfully"
+            message:
+                "Course and all university relationships deleted successfully"
         });
 
     } catch (error) {
-        console.error("Delete course error:", error);
+
+        console.error(
+            "Delete course error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Server error while deleting course",
+            message:
+                "Server error while deleting course",
             error: error.message
         });
     }
@@ -411,49 +656,71 @@ const deleteCourse = async (req, res) => {
 
 const getCoursesByUniversity = async (req, res) => {
     try {
-        const { universityId } = req.params;
 
-        // ------------------------------------------
-        // Check university
-        // ------------------------------------------
+        const { universityId } =
+            req.params;
 
-        const university = await University.findById(
-            universityId
-        );
+
+        // ==========================================
+        // CHECK UNIVERSITY
+        // ==========================================
+
+        const university =
+            await University.findById(
+                universityId
+            );
 
         if (!university) {
             return res.status(404).json({
                 success: false,
-                message: "University not found"
+                message:
+                    "University not found"
             });
         }
 
-        // ------------------------------------------
-        // Get courses
-        // ------------------------------------------
 
-        const courses = await Course.find({
-            university: universityId
-        })
-            .populate(
-                "university",
-                "name location county logo"
-            )
-            .sort({
-                courseName: 1
-            });
+        // ==========================================
+        // GET UNIVERSITY-COURSE RELATIONSHIPS
+        // ==========================================
+
+        const universityCourses =
+            await UniversityCourse.find({
+                university: universityId
+            })
+                .populate(
+                    "course"
+                )
+                .populate(
+                    "university",
+                    "name location county country website logo"
+                )
+                .sort({
+                    "course.courseName": 1
+                });
+
 
         return res.status(200).json({
             success: true,
+
             university: {
                 id: university._id,
-                name: university.name
+                name: university.name,
+                location: university.location,
+                county: university.county,
+                country: university.country,
+                website: university.website,
+                logo: university.logo
             },
-            count: courses.length,
-            courses
+
+            count:
+                universityCourses.length,
+
+            courses:
+                universityCourses
         });
 
     } catch (error) {
+
         console.error(
             "Get courses by university error:",
             error
@@ -475,6 +742,7 @@ const getCoursesByUniversity = async (req, res) => {
 
 const searchCourses = async (req, res) => {
     try {
+
         const {
             search,
             university,
@@ -485,113 +753,195 @@ const searchCourses = async (req, res) => {
             maxFees
         } = req.query;
 
-        // ------------------------------------------
-        // Build filter
-        // ------------------------------------------
 
-        const filter = {};
+        // ==========================================
+        // COURSE FILTER
+        // ==========================================
 
-        // ------------------------------------------
-        // General search
-        // ------------------------------------------
+        const courseFilter = {};
+
+
+        // ==========================================
+        // GENERAL SEARCH
+        // ==========================================
 
         if (search) {
-            filter.$or = [
+
+            courseFilter.$or = [
+
                 {
                     courseName: {
                         $regex: search,
                         $options: "i"
                     }
                 },
+
                 {
                     department: {
                         $regex: search,
                         $options: "i"
                     }
                 }
+
             ];
         }
 
-        // ------------------------------------------
-        // University filter
-        // ------------------------------------------
 
-        if (university) {
-            filter.university = university;
-        }
-
-        // ------------------------------------------
-        // Department
-        // ------------------------------------------
+        // ==========================================
+        // DEPARTMENT
+        // ==========================================
 
         if (department) {
-            filter.department = {
+
+            courseFilter.department = {
                 $regex: department,
                 $options: "i"
             };
         }
 
-        // ------------------------------------------
-        // Mode
-        // ------------------------------------------
 
-        if (mode) {
-            filter.mode = mode;
-        }
-
-        // ------------------------------------------
-        // Minimum grade
-        // ------------------------------------------
+        // ==========================================
+        // MINIMUM GRADE
+        // ==========================================
 
         if (minimumGrade) {
-            filter.minimumGrade = {
+
+            courseFilter.minimumGrade = {
                 $regex: minimumGrade,
                 $options: "i"
             };
         }
 
-        // ------------------------------------------
-        // Fees
-        // ------------------------------------------
 
-        if (minFees !== undefined || maxFees !== undefined) {
+        // ==========================================
+        // FIND COURSES
+        // ==========================================
 
-            filter.annualFees = {};
+        const courses =
+            await Course.find(courseFilter)
+                .populate(
+                    "category",
+                    "name description"
+                )
+                .sort({
+                    courseName: 1
+                });
+
+
+        // ==========================================
+        // COURSE IDS
+        // ==========================================
+
+        const courseIds =
+            courses.map(
+                course => course._id
+            );
+
+
+        // ==========================================
+        // UNIVERSITY COURSE FILTER
+        // ==========================================
+
+        const universityCourseFilter = {
+            course: {
+                $in: courseIds
+            }
+        };
+
+
+        // ==========================================
+        // UNIVERSITY FILTER
+        // ==========================================
+
+        if (university) {
+
+            universityCourseFilter.university =
+                university;
+        }
+
+
+        // ==========================================
+        // MODE FILTER
+        // ==========================================
+
+        if (mode) {
+
+            universityCourseFilter.mode =
+                mode;
+        }
+
+
+        // ==========================================
+        // FEES FILTER
+        // ==========================================
+
+        if (
+            minFees !== undefined ||
+            maxFees !== undefined
+        ) {
+
+            universityCourseFilter.annualFees = {};
 
             if (minFees !== undefined) {
-                filter.annualFees.$gte = Number(minFees);
+
+                universityCourseFilter
+                    .annualFees
+                    .$gte =
+                    Number(minFees);
             }
 
+
             if (maxFees !== undefined) {
-                filter.annualFees.$lte = Number(maxFees);
+
+                universityCourseFilter
+                    .annualFees
+                    .$lte =
+                    Number(maxFees);
             }
         }
 
-        // ------------------------------------------
-        // Search database
-        // ------------------------------------------
 
-        const courses = await Course.find(filter)
-            .populate(
-                "university",
-                "name location county logo"
+        // ==========================================
+        // GET UNIVERSITY OFFERINGS
+        // ==========================================
+
+        const offerings =
+            await UniversityCourse.find(
+                universityCourseFilter
             )
-            .sort({
-                courseName: 1
-            });
+                .populate(
+                    "university",
+                    "name location county country website logo"
+                )
+                .populate(
+                    "course"
+                )
+                .sort({
+                    annualFees: 1
+                });
+
+
+        // ==========================================
+        // RESPONSE
+        // ==========================================
 
         return res.status(200).json({
             success: true,
-            count: courses.length,
-            courses
+            count: offerings.length,
+            courses: offerings
         });
 
     } catch (error) {
-        console.error("Search courses error:", error);
+
+        console.error(
+            "Search courses error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
-            message: "Server error while searching courses",
+            message:
+                "Server error while searching courses",
             error: error.message
         });
     }
@@ -603,6 +953,7 @@ const searchCourses = async (req, res) => {
 // ======================================================
 
 module.exports = {
+
     createCourse,
     getCourses,
     getCourseById,
@@ -610,4 +961,5 @@ module.exports = {
     deleteCourse,
     getCoursesByUniversity,
     searchCourses
+
 };

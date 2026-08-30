@@ -18,7 +18,7 @@ const {
 const {
     auth,
     authorizeRoles
-} = require("../Midllewear/auth");
+} = require("../midllewear/auth");
 
 
 // ======================================================
