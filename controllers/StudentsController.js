@@ -5,6 +5,82 @@ const {
 } = require("../models/universityModel");
 
 
+// 1. REGISTER STUDENT
+// ======================================================
+const registerStudent = async (req, res) => {
+    try {
+        const {
+            firstName,
+            lastName,
+            email,
+            phone,
+            password,
+            profilePicture,
+            indexNo,
+            yearOfCompletion,
+            subjects,
+            interestedCourses
+        } = req.body;
+
+        if (!firstName || !lastName || !email || !phone || !password || !profilePicture || !indexNo || !yearOfCompletion) {
+            return res.status(400).json({ success: false, message: "Please provide all required fields" });
+        }
+
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Check for duplicates in parallel
+        const [existingEmail, existingPhone, existingIndex] = await Promise.all([
+            Student.findOne({ email: normalizedEmail }),
+            Student.findOne({ phone: phone.trim() }),
+            Student.findOne({ indexNo: indexNo.trim() })
+        ]);
+
+        if (existingEmail) return res.status(409).json({ success: false, message: "Email already registered" });
+        if (existingPhone) return res.status(409).json({ success: false, message: "Phone number already registered" });
+        if (existingIndex) return res.status(409).json({ success: false, message: "Index number already registered" });
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const student = await Student.create({
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            email: normalizedEmail,
+            phone: phone.trim(),
+            password: hashedPassword,
+            profilePicture: profilePicture,
+            indexNo: indexNo.trim(),
+            yearOfCompletion,
+            subjects: subjects || [],
+            interestedCourses: interestedCourses || [],
+            isAcademicProfileComplete: false,
+            isVerified: false,
+            isActive: true
+        });
+
+
+
+        return res.status(201).json({
+            success: true,
+            message: "Student registered successfully",
+            student: {
+                id: student._id,
+                firstName: student.firstName,
+                lastName: student.lastName,
+                email: student.email,
+                phone: student.phone,
+                profilePicture: student.profilePicture,
+                role: "student",
+                isAcademicProfileComplete: student.isAcademicProfileComplete,
+                isVerified: student.isVerified
+            }
+        });
+    } catch (error) {
+        console.error("Register student error:", error);
+        return res.status(500).json({ success: false, message: "Server error while registering student" });
+    }
+};
+
+
 
 // ======================================================
 // 1. GET MY STUDENT PROFILE
@@ -468,6 +544,7 @@ module.exports = {
     updateStudentProfile,
     updateStudentPicture,
     getStudentById,
+    registerStudent,
     verifyStudent,
     activateStudent,
     deactivateStudent

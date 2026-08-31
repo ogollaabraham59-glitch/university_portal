@@ -1,86 +1,224 @@
-const { User } = require('../models/universityModel')
-const bcrypt = require('bcrypt')
-const jwt = require('jsonwebtoken')
+
+const { User, University } = require("../models/universityModel");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 
-//create the first admin acount
+// ======================================================
+// 1. CREATE FIRST SUPER ADMIN
+// ======================================================
 
 exports.registerAdmin = async (req, res) => {
     try {
-        const { firstName, lastName, email, phone, password, secretkey } = req.body
-        //verify the admin secret key
+        const {
+            firstName,
+            lastName,
+            email,
+            phone,
+            password,
+            secretkey
+        } = req.body;
 
+        // Verify required fields
+        if (
+            !firstName ||
+            !lastName ||
+            !email ||
+            !phone ||
+            !password ||
+            !secretkey
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "All fields are required"
+            });
+        }
+
+        // Verify secret key
         if (secretkey !== process.env.secretKey) {
-            return res.status(403).json({ message: "authorize denied" })
+            return res.status(403).json({
+                success: false,
+                message: "Authorization denied"
+            });
         }
-        //chek if user exist
-        const userExist = await User.findOne({ email })
+
+        // Check if user already exists
+        const userExist = await User.findOne({
+            $or: [
+                { email },
+                { phone }
+            ]
+        });
+
         if (userExist) {
-            res.json({ massage: "email already taken" })
+            return res.status(409).json({
+                success: false,
+                message: "Email or phone number already taken"
+            });
         }
-        //harshing the password
-        const hashedPassword = await bcrypt.hash(password, 10)
-        const user = new User
-            ({
-                firstName,
-                lastName,
-                email,
-                phone,
-                password: hashedPassword,
-                role: "super_admin",
-                isActive: true,
-                teacher: null,
-                parent: null
 
-            })
-        //save new user
-        const newUser = await user.save()
-        res.status(201).json({ message: "admin account created successfully", newUser })
+        // Password must be at least 6 characters
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters"
+            });
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Create Super Admin
+        const user = new User({
+            firstName,
+            lastName,
+            email,
+            phone,
+            password: hashedPassword,
+            role: "super_admin",
+            university: null,
+            isActive: true,
+            isVerified: true
+        });
+
+        // Save user
+        const newUser = await user.save();
+
+        return res.status(201).json({
+            success: true,
+            message: "Super Admin account created successfully",
+            user: {
+                id: newUser._id,
+                firstName: newUser.firstName,
+                lastName: newUser.lastName,
+                email: newUser.email,
+                phone: newUser.phone,
+                role: newUser.role
+            }
+        });
+
     } catch (error) {
-        res.status(500).json({ message: error.message })
+        console.error("Register Super Admin Error:", error);
 
+        return res.status(500).json({
+            success: false,
+            message: "Server error while creating Super Admin",
+            error: error.message
+        });
     }
-}
-//login
+};
+
+
+// ======================================================
+// 3. LOGIN
+// ======================================================
+
 exports.logIn = async (req, res) => {
     try {
-        // by the email
-        // check user
-        const { email, password } = req.body
-        const user = await User.findOne({ email })
-        if (!user) {
-            return res.status(404).json({ message: "invalid credentials" })
 
+        const { email, password } = req.body;
+
+
+        // --------------------------------------------------
+        // Check required fields
+        // --------------------------------------------------
+
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required"
+            });
         }
-        //check if is an active
+
+
+        // --------------------------------------------------
+        // Find user
+        // --------------------------------------------------
+
+        const user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid credentials"
+            });
+        }
+
+
+        // --------------------------------------------------
+        // Check active account
+        // --------------------------------------------------
+
         if (!user.isActive) {
-            return res.status(403).json({ message: "account has been de activated" })
+            return res.status(403).json({
+                success: false,
+                message: "Account has been deactivated"
+            });
         }
-        const isMatch = await bcrypt.compare(password, user.password)
+
+
+        // --------------------------------------------------
+        // Compare password
+        // --------------------------------------------------
+
+        const isMatch = await bcrypt.compare(
+            password,
+            user.password
+        );
+
         if (!isMatch) {
-            res.status(401).json({ message: "invalid credentials" })
+            return res.status(401).json({
+                success: false,
+                message: "Invalid credentials"
+            });
         }
-        //jwt generetion
+
+
+        // --------------------------------------------------
+        // Generate JWT
+        // --------------------------------------------------
+
         const token = jwt.sign(
-            { userId: user._id, role: user.role },
+            {
+                userId: user._id,
+                role: user.role
+            },
             process.env.JWT_SECRET,
-            { expiresIn: '4hrs' }
-        )
-        //message,token,user,details
-        res.json({
-            message: "login succesfull",
+            {
+                expiresIn: "4h"
+            }
+        );
+
+
+        // --------------------------------------------------
+        // Login response
+        // --------------------------------------------------
+
+        return res.json({
+            success: true,
+            message: "Login successful",
+
             token,
+
             user: {
                 id: user._id,
-                name: user.name,
+                firstName: user.firstName,
+                lastName: user.lastName,
                 email: user.email,
-                role: user.role
+                phone: user.phone,
+                role: user.role,
+                university: user.university
             }
-
-        }
-        )
+        });
 
     } catch (error) {
-        res.status(500).json({ message: error.message })
+
+        console.error("Login Error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error during login",
+            error: error.message
+        });
     }
-}
+};

@@ -9,7 +9,8 @@ const {
     getStudentById,
     verifyStudent,
     activateStudent,
-    deactivateStudent
+    deactivateStudent,
+    registerStudent
 } = require("../controllers/StudentsController");
 
 const {
@@ -17,6 +18,11 @@ const {
     authorizeRoles
 } = require("../midllewear/auth");
 
+
+//register student
+router.post(
+    "/", registerStudent
+);
 
 
 

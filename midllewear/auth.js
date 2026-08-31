@@ -66,13 +66,14 @@ const registerStudent = async (req, res) => {
             email,
             phone,
             password,
+            profilePicture,
             indexNo,
             yearOfCompletion,
             subjects,
             interestedCourses
         } = req.body;
 
-        if (!firstName || !lastName || !email || !phone || !password || !indexNo || !yearOfCompletion) {
+        if (!firstName || !lastName || !email || !phone || !password || !profilePicture || !indexNo || !yearOfCompletion) {
             return res.status(400).json({ success: false, message: "Please provide all required fields" });
         }
 
@@ -97,6 +98,7 @@ const registerStudent = async (req, res) => {
             email: normalizedEmail,
             phone: phone.trim(),
             password: hashedPassword,
+            profilePicture: profilePicture,
             indexNo: indexNo.trim(),
             yearOfCompletion,
             subjects: subjects || [],
@@ -118,6 +120,7 @@ const registerStudent = async (req, res) => {
                 lastName: student.lastName,
                 email: student.email,
                 phone: student.phone,
+                profilePicture: student.profilePicture,
                 role: "student",
                 isAcademicProfileComplete: student.isAcademicProfileComplete,
                 isVerified: student.isVerified
