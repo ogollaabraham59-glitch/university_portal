@@ -15,6 +15,9 @@ const {
 } = require("../controllers/universityControllers");
 
 const { auth, authorizeRoles } = require('../midllewear/auth')
+const {
+    checkUniversityOwnership
+} = require("../midllewear/universityOwnership");
 
 
 // ======================================================
@@ -55,8 +58,7 @@ router.post('/', auth, authorizeRoles('super_admin'), createUniversity
 router.put(
     "/:id",
     auth,
-    authorizeRoles("super_admin", "university_admin"),
-    updateUniversity
+    authorizeRoles("super_admin", "university_admin"), checkUniversityOwnership, updateUniversity
 );
 
 
