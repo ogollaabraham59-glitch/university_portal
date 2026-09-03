@@ -18,12 +18,20 @@ const {
     authorizeRoles
 } = require("../midllewear/auth");
 
+const upload = require("../midllewear/uploadPicture");
 
-//register student
+
+// ======================================================
+// STUDENT REGISTRATION
+// ======================================================
+
+// Register student
+// Accepts profile picture through FormData
 router.post(
-    "/", registerStudent
+    "/",
+    upload.single("profilePicture"),
+    registerStudent
 );
-
 
 
 // ======================================================
@@ -48,12 +56,16 @@ router.put(
 );
 
 
+// ======================================================
+// STUDENT PROFILE PICTURE
+// ======================================================
+
 // Update logged-in student's profile picture
 router.put(
     "/profile/picture",
     auth,
     authorizeRoles("student"),
-
+    upload.single("profilePicture"),
     updateStudentPicture
 );
 
