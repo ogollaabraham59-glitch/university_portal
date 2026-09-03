@@ -219,14 +219,22 @@ const getStudentProfile = async (req, res) => {
     }
 };
 
-
 // ======================================================
-// 2. UPDATE STUDENT PROFILE
+// UPDATE STUDENT PROFILE
 // ======================================================
 
 const updateStudentProfile = async (req, res) => {
     try {
+
+        // --------------------------------------------------
+        // 1. GET STUDENT ID FROM JWT
+        // --------------------------------------------------
+
         const studentId = req.user.id;
+
+        // --------------------------------------------------
+        // 2. GET DATA FROM REQUEST
+        // --------------------------------------------------
 
         const {
             firstName,
@@ -236,8 +244,13 @@ const updateStudentProfile = async (req, res) => {
             indexNo,
             yearOfCompletion,
             subjects,
+            totalGrade,
             interestedCourses
         } = req.body;
+
+        // --------------------------------------------------
+        // 3. FIND STUDENT
+        // --------------------------------------------------
 
         const student = await Student.findById(studentId);
 
@@ -248,114 +261,253 @@ const updateStudentProfile = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
-        // Update basic information
-        // ------------------------------------------
+        // ==================================================
+        // BASIC INFORMATION
+        // ==================================================
 
         if (firstName !== undefined) {
-            student.firstName = firstName;
+
+            if (!firstName.trim()) {
+                return res.status(400).json({
+                    success: false,
+                    message: "First name cannot be empty"
+                });
+            }
+
+            student.firstName = firstName.trim();
         }
 
         if (lastName !== undefined) {
-            student.lastName = lastName;
-        }
 
-        // ------------------------------------------
-        // Check email uniqueness
-        // ------------------------------------------
-
-        if (email !== undefined && email !== student.email) {
-
-            const existingEmail = await Student.findOne({
-                email: email.toLowerCase(),
-                _id: { $ne: studentId }
-            });
-
-            if (existingEmail) {
-                return res.status(409).json({
+            if (!lastName.trim()) {
+                return res.status(400).json({
                     success: false,
-                    message: "Email already belongs to another student"
+                    message: "Last name cannot be empty"
                 });
             }
 
-            student.email = email.toLowerCase();
+            student.lastName = lastName.trim();
         }
 
-        // ------------------------------------------
-        // Check phone uniqueness
-        // ------------------------------------------
+        // ==================================================
+        // EMAIL
+        // ==================================================
 
-        if (phone !== undefined && phone !== student.phone) {
+        if (email !== undefined) {
 
-            const existingPhone = await Student.findOne({
-                phone,
-                _id: { $ne: studentId }
-            });
+            const normalizedEmail =
+                email.trim().toLowerCase();
 
-            if (existingPhone) {
-                return res.status(409).json({
+            if (!normalizedEmail) {
+                return res.status(400).json({
                     success: false,
-                    message: "Phone number already belongs to another student"
+                    message: "Email cannot be empty"
                 });
             }
 
-            student.phone = phone;
+            if (normalizedEmail !== student.email) {
+
+                const existingEmail =
+                    await Student.findOne({
+                        email: normalizedEmail,
+                        _id: { $ne: studentId }
+                    });
+
+                if (existingEmail) {
+                    return res.status(409).json({
+                        success: false,
+                        message:
+                            "Email already belongs to another student"
+                    });
+                }
+
+                student.email = normalizedEmail;
+            }
         }
 
-        // ------------------------------------------
-        // Academic information
-        // ------------------------------------------
+        // ==================================================
+        // PHONE
+        // ==================================================
+
+        if (phone !== undefined) {
+
+            const cleanPhone = phone.trim();
+
+            if (!cleanPhone) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Phone number cannot be empty"
+                });
+            }
+
+            if (cleanPhone !== student.phone) {
+
+                const existingPhone =
+                    await Student.findOne({
+                        phone: cleanPhone,
+                        _id: { $ne: studentId }
+                    });
+
+                if (existingPhone) {
+                    return res.status(409).json({
+                        success: false,
+                        message:
+                            "Phone number already belongs to another student"
+                    });
+                }
+
+                student.phone = cleanPhone;
+            }
+        }
+
+        // ==================================================
+        // INDEX NUMBER
+        // ==================================================
 
         if (indexNo !== undefined) {
 
-            const existingIndex = await Student.findOne({
-                indexNo,
-                _id: { $ne: studentId }
-            });
+            const cleanIndexNo = indexNo.trim();
 
-            if (existingIndex) {
-                return res.status(409).json({
-                    success: false,
-                    message: "Index number already belongs to another student"
-                });
+            if (cleanIndexNo) {
+
+                if (cleanIndexNo !== student.indexNo) {
+
+                    const existingIndex =
+                        await Student.findOne({
+                            indexNo: cleanIndexNo,
+                            _id: { $ne: studentId }
+                        });
+
+                    if (existingIndex) {
+                        return res.status(409).json({
+                            success: false,
+                            message:
+                                "Index number already belongs to another student"
+                        });
+                    }
+
+                    student.indexNo = cleanIndexNo;
+                }
+
+            } else {
+                student.indexNo = "";
             }
-
-            student.indexNo = indexNo;
         }
+
+        // ==================================================
+        // YEAR OF COMPLETION
+        // ==================================================
 
         if (yearOfCompletion !== undefined) {
-            student.yearOfCompletion = yearOfCompletion;
+
+            if (
+                yearOfCompletion === null ||
+                yearOfCompletion === ""
+            ) {
+                student.yearOfCompletion = null;
+
+            } else {
+
+                const year =
+                    Number(yearOfCompletion);
+
+                if (
+                    !Number.isInteger(year) ||
+                    year < 1900 ||
+                    year > new Date().getFullYear()
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Please provide a valid year of completion"
+                    });
+                }
+
+                student.yearOfCompletion = year;
+            }
         }
 
-        // ------------------------------------------
-        // Subjects and grades
-        // ------------------------------------------
+        // ==================================================
+        // SUBJECTS AND GRADES
+        // ==================================================
 
         if (subjects !== undefined) {
 
             if (!Array.isArray(subjects)) {
                 return res.status(400).json({
                     success: false,
-                    message: "Subjects must be an array"
+                    message:
+                        "Subjects must be an array"
                 });
             }
 
-            student.subjects = subjects;
+            // Validate every subject
+            for (const item of subjects) {
+
+                if (
+                    !item ||
+                    typeof item.subject !== "string" ||
+                    typeof item.grade !== "string"
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Each subject must contain subject and grade"
+                    });
+                }
+
+                if (
+                    !item.subject.trim() ||
+                    !item.grade.trim()
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Subject name and grade cannot be empty"
+                    });
+                }
+            }
+
+            student.subjects = subjects.map(item => ({
+                subject: item.subject.trim(),
+                grade: item.grade.trim()
+            }));
         }
 
-        // ------------------------------------------
-        // Interested courses
-        // ------------------------------------------
+        // ==================================================
+        // TOTAL GRADE
+        // ==================================================
+
+        if (totalGrade !== undefined) {
+
+            if (
+                totalGrade === null ||
+                totalGrade === ""
+            ) {
+                student.totalGrade = "";
+
+            } else {
+
+                student.totalGrade =
+                    String(totalGrade).trim();
+            }
+        }
+
+        // ==================================================
+        // INTERESTED COURSES
+        // ==================================================
 
         if (interestedCourses !== undefined) {
 
             if (!Array.isArray(interestedCourses)) {
                 return res.status(400).json({
                     success: false,
-                    message: "Interested courses must be an array"
+                    message:
+                        "Interested courses must be an array"
                 });
             }
 
+            // Maximum of 3 courses
             if (interestedCourses.length > 3) {
                 return res.status(400).json({
                     success: false,
@@ -364,73 +516,148 @@ const updateStudentProfile = async (req, res) => {
                 });
             }
 
-            // Make sure all courses exist
-            const courses = await Course.find({
-                _id: { $in: interestedCourses }
-            });
+            // Remove duplicate course IDs
+            const uniqueCourses =
+                [...new Set(
+                    interestedCourses.map(
+                        course => course.toString()
+                    )
+                )];
 
-            if (courses.length !== interestedCourses.length) {
+            if (
+                uniqueCourses.length !==
+                interestedCourses.length
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: "One or more selected courses do not exist"
+                    message:
+                        "You cannot select the same course more than once"
                 });
             }
 
-            student.interestedCourses = interestedCourses;
+            // Check that courses actually exist
+            if (uniqueCourses.length > 0) {
+
+                const courses =
+                    await Course.find({
+                        _id: { $in: uniqueCourses },
+                        isActive: true
+                    });
+
+                if (
+                    courses.length !==
+                    uniqueCourses.length
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "One or more selected courses do not exist or are inactive"
+                    });
+                }
+            }
+
+            student.interestedCourses =
+                uniqueCourses;
         }
 
-        // ------------------------------------------
-        // Determine academic profile completion
-        // ------------------------------------------
+        // ==================================================
+        // DETERMINE ACADEMIC PROFILE COMPLETION
+        // ==================================================
 
         const hasSubjects =
             Array.isArray(student.subjects) &&
             student.subjects.length > 0;
 
         const hasIndexNo =
-            student.indexNo &&
+            typeof student.indexNo === "string" &&
             student.indexNo.trim() !== "";
 
         const hasYear =
-            student.yearOfCompletion;
+            student.yearOfCompletion !== null &&
+            student.yearOfCompletion !== undefined;
 
         const hasTotalGrade =
-            student.totalGrade &&
+            typeof student.totalGrade === "string" &&
             student.totalGrade.trim() !== "";
 
-        if (
+        // Academic profile is complete only when
+        // all required academic information exists.
+
+        student.isAcademicProfileComplete =
             hasSubjects &&
             hasIndexNo &&
             hasYear &&
-            hasTotalGrade
-        ) {
-            student.isAcademicProfileComplete = true;
-        } else {
-            student.isAcademicProfileComplete = false;
-        }
+            hasTotalGrade;
+
+        // ==================================================
+        // SAVE
+        // ==================================================
 
         await student.save();
 
-        // Remove password from response
-        const studentResponse = student.toObject();
+        // ==================================================
+        // REMOVE PASSWORD FROM RESPONSE
+        // ==================================================
+
+        const studentResponse =
+            student.toObject();
+
         delete studentResponse.password;
+
+        // ==================================================
+        // RESPONSE
+        // ==================================================
 
         return res.status(200).json({
             success: true,
-            message: "Student profile updated successfully",
+            message:
+                "Student profile updated successfully",
             student: studentResponse
         });
 
     } catch (error) {
-        console.error("Update student profile error:", error);
+
+        console.error(
+            "Update student profile error:",
+            error
+        );
+
+        // Mongoose duplicate key
+        if (error.code === 11000) {
+
+            const duplicateField =
+                Object.keys(
+                    error.keyPattern || {}
+                )[0];
+
+            return res.status(409).json({
+                success: false,
+                message:
+                    `${duplicateField} already exists`
+            });
+        }
+
+        // Mongoose validation error
+        if (error.name === "ValidationError") {
+
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Invalid student profile data",
+                error: error.message
+            });
+        }
 
         return res.status(500).json({
             success: false,
-            message: "Server error while updating student profile",
+            message:
+                "Server error while updating student profile",
             error: error.message
         });
     }
 };
+
+
 
 
 // ======================================================
