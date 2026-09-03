@@ -140,13 +140,14 @@ const studentSchema = new mongoose.Schema(
 
         indexNo: {
             type: String,
-            required: true,
-            trim: true
+
+            trim: true,
+            default: null
         },
 
         yearOfCompletion: {
             type: Number,
-            required: true
+            default: null
         },
 
         // ==============================================
