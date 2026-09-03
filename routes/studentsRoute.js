@@ -15,7 +15,8 @@ const {
 
 const {
     auth,
-    authorizeRoles
+    authorizeRoles,
+    loginStudent
 } = require("../midllewear/auth");
 
 const upload = require("../midllewear/uploadPicture");
@@ -33,6 +34,11 @@ router.post(
     registerStudent
 );
 
+
+//studentlogin
+router.post(
+    "/login", loginStudent
+);
 
 // ======================================================
 // STUDENT PROFILE

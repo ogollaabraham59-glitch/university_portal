@@ -177,6 +177,52 @@ const registerStudent = async (req, res) => {
     }
 }
 
+//student log in
+const loginStudent = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ success: false, message: "Email and password are required" });
+        }
+
+        const student = await Student.findOne({ email: email.toLowerCase().trim() });
+        if (!student) {
+            return res.status(401).json({ success: false, message: "Invalid email or password" });
+        }
+
+        if (!student.isActive) {
+            return res.status(403).json({ success: false, message: "Your account has been deactivated" });
+        }
+
+        const passwordMatch = await bcrypt.compare(password, student.password);
+        if (!passwordMatch) {
+            return res.status(401).json({ success: false, message: "Invalid email or password" });
+        }
+
+        const token = generateToken(student._id, "student");
+
+        return res.status(200).json({
+            success: true,
+            message: "Student login successful",
+            token,
+            student: {
+                id: student._id,
+                firstName: student.firstName,
+                lastName: student.lastName,
+                email: student.email,
+                phone: student.phone,
+                role: "student",
+                isAcademicProfileComplete: student.isAcademicProfileComplete,
+                isVerified: student.isVerified
+            }
+        });
+    } catch (error) {
+        console.error("Student login error:", error);
+        return res.status(500).json({ success: false, message: "Server error while logging in" });
+    }
+};
+
 
 
 
