@@ -5,8 +5,10 @@ const {
 } = require("../models/universityModel");
 
 
-// 1. REGISTER STUDENT
 // ======================================================
+// REGISTER STUDENT
+// ======================================================
+
 const registerStudent = async (req, res) => {
     try {
         const {
@@ -14,54 +16,115 @@ const registerStudent = async (req, res) => {
             lastName,
             email,
             phone,
-            password,
-            profilePicture,
-            indexNo,
-            yearOfCompletion,
-            subjects,
-            interestedCourses
+            password
         } = req.body;
 
-        if (!firstName || !lastName || !email || !phone || !password || !profilePicture || !indexNo || !yearOfCompletion) {
-            return res.status(400).json({ success: false, message: "Please provide all required fields" });
+        // --------------------------------------------------
+        // 1. VALIDATE REQUIRED FIELDS
+        // --------------------------------------------------
+
+        if (
+            !firstName ||
+            !lastName ||
+            !email ||
+            !phone ||
+            !password
+        ) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "First name, last name, email, phone and password are required"
+            });
         }
 
-        const normalizedEmail = email.toLowerCase().trim();
+        // --------------------------------------------------
+        // 2. CLEAN INPUT
+        // --------------------------------------------------
 
-        // Check for duplicates in parallel
-        const [existingEmail, existingPhone, existingIndex] = await Promise.all([
-            Student.findOne({ email: normalizedEmail }),
-            Student.findOne({ phone: phone.trim() }),
-            Student.findOne({ indexNo: indexNo.trim() })
-        ]);
+        const cleanFirstName = firstName.trim();
+        const cleanLastName = lastName.trim();
+        const normalizedEmail = email.trim().toLowerCase();
+        const cleanPhone = phone.trim();
 
-        if (existingEmail) return res.status(409).json({ success: false, message: "Email already registered" });
-        if (existingPhone) return res.status(409).json({ success: false, message: "Phone number already registered" });
-        if (existingIndex) return res.status(409).json({ success: false, message: "Index number already registered" });
+        // --------------------------------------------------
+        // 3. CHECK IF EMAIL ALREADY EXISTS
+        // --------------------------------------------------
+
+        const existingEmail = await Student.findOne({
+            email: normalizedEmail
+        });
+
+        if (existingEmail) {
+            return res.status(409).json({
+                success: false,
+                message: "Email already registered"
+            });
+        }
+
+        // --------------------------------------------------
+        // 4. CHECK IF PHONE ALREADY EXISTS
+        // --------------------------------------------------
+
+        const existingPhone = await Student.findOne({
+            phone: cleanPhone
+        });
+
+        if (existingPhone) {
+            return res.status(409).json({
+                success: false,
+                message: "Phone number already registered"
+            });
+        }
+
+        // --------------------------------------------------
+        // 5. HASH PASSWORD
+        // --------------------------------------------------
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        // --------------------------------------------------
+        // 6. PROFILE PICTURE
+        // --------------------------------------------------
+
+        let profilePicture = "";
+
+        if (req.file) {
+            profilePicture = req.file.path;
+        }
+
+        // --------------------------------------------------
+        // 7. CREATE STUDENT
+        // --------------------------------------------------
+
         const student = await Student.create({
-            firstName: firstName.trim(),
-            lastName: lastName.trim(),
+            firstName: cleanFirstName,
+            lastName: cleanLastName,
             email: normalizedEmail,
-            phone: phone.trim(),
+            phone: cleanPhone,
             password: hashedPassword,
-            profilePicture: profilePicture,
-            indexNo: indexNo.trim(),
-            yearOfCompletion,
-            subjects: subjects || [],
-            interestedCourses: interestedCourses || [],
+            profilePicture,
+
+            // Academic information will be completed
+            // after registration.
+            indexNo: "",
+            yearOfCompletion: null,
+            subjects: [],
+            totalGrade: "",
+            interestedCourses: [],
+
             isAcademicProfileComplete: false,
             isVerified: false,
             isActive: true
         });
 
-
+        // --------------------------------------------------
+        // 8. RETURN STUDENT INFORMATION
+        // --------------------------------------------------
 
         return res.status(201).json({
             success: true,
             message: "Student registered successfully",
+
             student: {
                 id: student._id,
                 firstName: student.firstName,
@@ -70,15 +133,50 @@ const registerStudent = async (req, res) => {
                 phone: student.phone,
                 profilePicture: student.profilePicture,
                 role: "student",
-                isAcademicProfileComplete: student.isAcademicProfileComplete,
-                isVerified: student.isVerified
+
+                isAcademicProfileComplete:
+                    student.isAcademicProfileComplete,
+
+                isVerified: student.isVerified,
+                isActive: student.isActive
             }
         });
+
     } catch (error) {
-        console.error("Register student error:", error);
-        return res.status(500).json({ success: false, message: "Server error while registering student" });
+
+        console.error(
+            "Register student error:",
+            error
+        );
+
+        // --------------------------------------------------
+        // MONGOOSE DUPLICATE KEY ERROR
+        // --------------------------------------------------
+
+        if (error.code === 11000) {
+
+            const duplicateField =
+                Object.keys(error.keyPattern || {})[0];
+
+            return res.status(409).json({
+                success: false,
+                message: `${duplicateField} already registered`
+            });
+        }
+
+        // --------------------------------------------------
+        // SERVER ERROR
+        // --------------------------------------------------
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Server error while registering student",
+            error: error.message
+        });
     }
-};
+}
+
 
 
 
