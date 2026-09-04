@@ -1,7 +1,5 @@
-
 const {
-    User,
-    Kcse,
+    Student,
     Course,
     UniversityCourse,
     University
@@ -38,10 +36,10 @@ const getGradeValue = (grade) => {
         return 0;
     }
 
-    const formattedGrade =
-        grade.toString()
-            .trim()
-            .toUpperCase();
+    const formattedGrade = grade
+        .toString()
+        .trim()
+        .toUpperCase();
 
     return gradeValues[formattedGrade] || 0;
 };
@@ -71,26 +69,38 @@ const checkOverallGrade = (
 // ======================================================
 
 const findSubjectGrade = (
-    subjects,
+    studentSubjects,
     requiredSubject
 ) => {
 
-    if (!Array.isArray(subjects)) {
+    if (!Array.isArray(studentSubjects)) {
         return null;
     }
 
-    const subject = subjects.find(
-        item =>
-            item.subject &&
-            item.subject
-                .toLowerCase()
-                .trim() ===
-            requiredSubject
-                .toLowerCase()
-                .trim()
-    );
+    if (!requiredSubject) {
+        return null;
+    }
 
-    return subject ? subject.grade : null;
+    const required =
+        requiredSubject
+            .toString()
+            .trim()
+            .toLowerCase();
+
+    const subject =
+        studentSubjects.find(
+            item =>
+                item &&
+                item.subject &&
+                item.subject
+                    .toString()
+                    .trim()
+                    .toLowerCase() === required
+        );
+
+    return subject
+        ? subject.grade
+        : null;
 };
 
 
@@ -125,13 +135,15 @@ const checkSubjectRequirements = (
                     );
 
                 const passed =
-                    studentGrade &&
-                    checkOverallGrade(
-                        studentGrade,
-                        requirement.minimumGrade
-                    );
+                    studentGrade
+                        ? checkOverallGrade(
+                            studentGrade,
+                            requirement.minimumGrade
+                        )
+                        : false;
 
                 return {
+
                     subject:
                         requirement.subject,
 
@@ -141,14 +153,14 @@ const checkSubjectRequirements = (
                     studentGrade:
                         studentGrade || null,
 
-                    passed: Boolean(passed)
+                    passed
                 };
             }
         );
 
     const eligible =
         subjectResults.every(
-            subject => subject.passed
+            item => item.passed
         );
 
     return {
@@ -159,7 +171,61 @@ const checkSubjectRequirements = (
 
 
 // ======================================================
-// 1. CHECK COURSE ELIGIBILITY
+// GET UNIVERSITIES OFFERING A COURSE
+// ======================================================
+
+const getCourseUniversities = async (
+    courseId
+) => {
+
+    const universityCourses =
+        await UniversityCourse.find({
+            course: courseId,
+            isAvailable: true
+        }).populate(
+            "university"
+        );
+
+    return universityCourses
+        .filter(
+            item => item.university
+        )
+        .map(
+            item => ({
+
+                universityCourseId:
+                    item._id,
+
+                university:
+                    item.university,
+
+                campus:
+                    item.campus,
+
+                annualFees:
+                    item.annualFees,
+
+                applicationFee:
+                    item.applicationFee,
+
+                mode:
+                    item.mode,
+
+                intake:
+                    item.intake,
+
+                applicationLink:
+                    item.applicationLink,
+
+                isAvailable:
+                    item.isAvailable
+            })
+        );
+};
+
+
+// ======================================================
+// 1. CHECK ONE COURSE ELIGIBILITY
 // ======================================================
 
 const checkCourseEligibility = async (
@@ -169,9 +235,15 @@ const checkCourseEligibility = async (
 
     try {
 
-        const studentId = req.user.id;
+        // ==================================================
+        // STUDENT ID FROM JWT
+        // ==================================================
 
-        const { courseId } = req.params;
+        const studentId =
+            req.user.id;
+
+        const { courseId } =
+            req.params;
 
 
         // ==================================================
@@ -179,33 +251,52 @@ const checkCourseEligibility = async (
         // ==================================================
 
         const student =
-            await User.findById(studentId);
+            await Student.findById(
+                studentId
+            );
 
         if (!student) {
 
             return res.status(404).json({
+
                 success: false,
-                message: "Student not found"
+
+                message:
+                    "Student not found"
             });
         }
 
 
         // ==================================================
-        // GET KCSE RESULT
+        // CHECK STUDENT ACTIVE
         // ==================================================
 
-        const kcseResult =
-            await Kcse.findOne({
-                student: studentId,
-                status: "Processed"
-            });
+        if (!student.isActive) {
 
-        if (!kcseResult) {
+            return res.status(403).json({
 
-            return res.status(404).json({
                 success: false,
+
                 message:
-                    "Processed KCSE result not found"
+                    "Your student account has been deactivated"
+            });
+        }
+
+
+        // ==================================================
+        // CHECK ACADEMIC PROFILE
+        // ==================================================
+
+        if (
+            !student.isAcademicProfileComplete
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "Please complete your academic profile first"
             });
         }
 
@@ -215,13 +306,19 @@ const checkCourseEligibility = async (
         // ==================================================
 
         const course =
-            await Course.findById(courseId);
+            await Course.findOne({
+                _id: courseId,
+                isActive: true
+            });
 
         if (!course) {
 
             return res.status(404).json({
+
                 success: false,
-                message: "Course not found"
+
+                message:
+                    "Course not found or inactive"
             });
         }
 
@@ -232,7 +329,7 @@ const checkCourseEligibility = async (
 
         const overallEligible =
             checkOverallGrade(
-                kcseResult.meanGrade,
+                student.totalGrade,
                 course.minimumGrade
             );
 
@@ -243,8 +340,8 @@ const checkCourseEligibility = async (
 
         const subjectCheck =
             checkSubjectRequirements(
-                kcseResult.extractedSubjects,
-                course.subjectRequirements
+                student.subjects,
+                course.requirements
             );
 
 
@@ -258,50 +355,33 @@ const checkCourseEligibility = async (
 
 
         // ==================================================
-        // GET UNIVERSITIES OFFERING COURSE
+        // GET UNIVERSITIES
         // ==================================================
 
         let universities = [];
 
         if (eligible) {
 
-            const universityCourses =
-                await UniversityCourse.find({
-                    course: courseId,
-                    availability: true
-                }).populate("university");
-
-
             universities =
-                universityCourses
-                    .filter(
-                        item => item.university
-                    )
-                    .map(
-                        item => ({
-                            universityCourseId:
-                                item._id,
-
-                            university:
-                                item.university,
-
-                            fees:
-                                item.fees,
-
-                            intakes:
-                                item.intakes,
-
-                            mode:
-                                item.mode,
-
-                            applicationLink:
-                                item.applicationLink,
-
-                            availability:
-                                item.availability
-                        })
-                    );
+                await getCourseUniversities(
+                    course._id
+                );
         }
+
+
+        // ==================================================
+        // CHECK WHETHER STUDENT IS INTERESTED
+        // ==================================================
+
+        const isInterested =
+            Array.isArray(
+                student.interestedCourses
+            ) &&
+            student.interestedCourses.some(
+                id =>
+                    id.toString() ===
+                    course._id.toString()
+            );
 
 
         // ==================================================
@@ -315,29 +395,58 @@ const checkCourseEligibility = async (
             eligible,
 
             course: {
-                id: course._id,
+
+                id:
+                    course._id,
+
                 courseName:
                     course.courseName,
+
+                courseCode:
+                    course.courseCode,
+
+                description:
+                    course.description,
+
                 duration:
                     course.duration,
-                minimumGrade:
-                    course.minimumGrade,
+
                 department:
                     course.department,
+
+                minimumGrade:
+                    course.minimumGrade,
+
                 mode:
                     course.mode
             },
 
             student: {
-                meanGrade:
-                    kcseResult.meanGrade
+
+                id:
+                    student._id,
+
+                firstName:
+                    student.firstName,
+
+                lastName:
+                    student.lastName,
+
+                totalGrade:
+                    student.totalGrade,
+
+                yearOfCompletion:
+                    student.yearOfCompletion
             },
+
+            isInterested,
 
             eligibility: {
 
                 overallGrade: {
+
                     studentGrade:
-                        kcseResult.meanGrade,
+                        student.totalGrade,
 
                     requiredGrade:
                         course.minimumGrade,
@@ -386,7 +495,12 @@ const getMyEligibleCourses = async (
 
     try {
 
-        const studentId = req.user.id;
+        // ==================================================
+        // STUDENT ID
+        // ==================================================
+
+        const studentId =
+            req.user.id;
 
 
         // ==================================================
@@ -394,43 +508,64 @@ const getMyEligibleCourses = async (
         // ==================================================
 
         const student =
-            await User.findById(studentId);
+            await Student.findById(
+                studentId
+            );
 
         if (!student) {
 
             return res.status(404).json({
+
                 success: false,
-                message: "Student not found"
-            });
-        }
 
-
-        // ==================================================
-        // GET KCSE RESULT
-        // ==================================================
-
-        const kcseResult =
-            await Kcse.findOne({
-                student: studentId,
-                status: "Processed"
-            });
-
-        if (!kcseResult) {
-
-            return res.status(404).json({
-                success: false,
                 message:
-                    "Processed KCSE result not found"
+                    "Student not found"
             });
         }
 
 
         // ==================================================
-        // GET ALL COURSES
+        // CHECK ACTIVE ACCOUNT
+        // ==================================================
+
+        if (!student.isActive) {
+
+            return res.status(403).json({
+
+                success: false,
+
+                message:
+                    "Your student account has been deactivated"
+            });
+        }
+
+
+        // ==================================================
+        // CHECK ACADEMIC PROFILE
+        // ==================================================
+
+        if (
+            !student.isAcademicProfileComplete
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "Please complete your academic profile first"
+            });
+        }
+
+
+        // ==================================================
+        // GET ACTIVE COURSES
         // ==================================================
 
         const courses =
-            await Course.find();
+            await Course.find({
+                isActive: true
+            });
 
 
         const eligibleCourses = [];
@@ -440,15 +575,18 @@ const getMyEligibleCourses = async (
         // CHECK EVERY COURSE
         // ==================================================
 
-        for (const course of courses) {
+        for (
+            const course
+            of courses
+        ) {
 
             // ----------------------------------------------
-            // Overall grade
+            // OVERALL GRADE
             // ----------------------------------------------
 
             const overallEligible =
                 checkOverallGrade(
-                    kcseResult.meanGrade,
+                    student.totalGrade,
                     course.minimumGrade
                 );
 
@@ -459,13 +597,13 @@ const getMyEligibleCourses = async (
 
 
             // ----------------------------------------------
-            // Subject requirements
+            // SUBJECT REQUIREMENTS
             // ----------------------------------------------
 
             const subjectCheck =
                 checkSubjectRequirements(
-                    kcseResult.extractedSubjects,
-                    course.subjectRequirements
+                    student.subjects,
+                    course.requirements
                 );
 
 
@@ -475,51 +613,32 @@ const getMyEligibleCourses = async (
 
 
             // ----------------------------------------------
-            // Universities
+            // UNIVERSITIES
             // ----------------------------------------------
-
-            const universityCourses =
-                await UniversityCourse.find({
-                    course: course._id,
-                    availability: true
-                }).populate("university");
-
 
             const universities =
-                universityCourses
-                    .filter(
-                        item => item.university
-                    )
-                    .map(
-                        item => ({
-
-                            universityCourseId:
-                                item._id,
-
-                            university:
-                                item.university,
-
-                            fees:
-                                item.fees,
-
-                            intakes:
-                                item.intakes,
-
-                            mode:
-                                item.mode,
-
-                            applicationLink:
-                                item.applicationLink,
-
-                            availability:
-                                item.availability
-
-                        })
-                    );
+                await getCourseUniversities(
+                    course._id
+                );
 
 
             // ----------------------------------------------
-            // Add eligible course
+            // CHECK INTEREST
+            // ----------------------------------------------
+
+            const isInterested =
+                Array.isArray(
+                    student.interestedCourses
+                ) &&
+                student.interestedCourses.some(
+                    id =>
+                        id.toString() ===
+                        course._id.toString()
+                );
+
+
+            // ----------------------------------------------
+            // ADD COURSE
             // ----------------------------------------------
 
             eligibleCourses.push({
@@ -532,44 +651,59 @@ const getMyEligibleCourses = async (
                     courseName:
                         course.courseName,
 
+                    courseCode:
+                        course.courseCode,
+
+                    description:
+                        course.description,
+
                     duration:
                         course.duration,
-
-                    minimumGrade:
-                        course.minimumGrade,
 
                     department:
                         course.department,
 
+                    minimumGrade:
+                        course.minimumGrade,
+
                     mode:
                         course.mode
-
                 },
+
+                isInterested,
 
                 eligibility: {
 
                     overallGrade: {
 
                         studentGrade:
-                            kcseResult.meanGrade,
+                            student.totalGrade,
 
                         requiredGrade:
                             course.minimumGrade,
 
                         passed:
                             overallEligible
-
                     },
 
                     subjects:
                         subjectCheck.subjects
-
                 },
 
                 universities
-
             });
         }
+
+
+        // ==================================================
+        // PRIORITIZE STUDENT'S INTERESTED COURSES
+        // ==================================================
+
+        eligibleCourses.sort(
+            (a, b) =>
+                Number(b.isInterested) -
+                Number(a.isInterested)
+        );
 
 
         // ==================================================
@@ -589,18 +723,16 @@ const getMyEligibleCourses = async (
                     student.firstName,
 
                 lastName:
-                    student.lastName
+                    student.lastName,
 
-            },
+                totalGrade:
+                    student.totalGrade,
 
-            kcse: {
+                yearOfCompletion:
+                    student.yearOfCompletion,
 
-                meanGrade:
-                    kcseResult.meanGrade,
-
-                status:
-                    kcseResult.status
-
+                interestedCourses:
+                    student.interestedCourses
             },
 
             count:
@@ -626,7 +758,6 @@ const getMyEligibleCourses = async (
 
             error:
                 error.message
-
         });
     }
 };
@@ -643,10 +774,66 @@ const getEligibleCoursesByUniversity = async (
 
     try {
 
-        const studentId = req.user.id;
+        const studentId =
+            req.user.id;
 
         const { universityId } =
             req.params;
+
+
+        // ==================================================
+        // GET STUDENT
+        // ==================================================
+
+        const student =
+            await Student.findById(
+                studentId
+            );
+
+        if (!student) {
+
+            return res.status(404).json({
+
+                success: false,
+
+                message:
+                    "Student not found"
+            });
+        }
+
+
+        // ==================================================
+        // CHECK ACTIVE ACCOUNT
+        // ==================================================
+
+        if (!student.isActive) {
+
+            return res.status(403).json({
+
+                success: false,
+
+                message:
+                    "Your student account has been deactivated"
+            });
+        }
+
+
+        // ==================================================
+        // CHECK ACADEMIC PROFILE
+        // ==================================================
+
+        if (
+            !student.isAcademicProfileComplete
+        ) {
+
+            return res.status(400).json({
+
+                success: false,
+
+                message:
+                    "Please complete your academic profile first"
+            });
+        }
 
 
         // ==================================================
@@ -654,35 +841,19 @@ const getEligibleCoursesByUniversity = async (
         // ==================================================
 
         const university =
-            await University.findById(
-                universityId
-            );
+            await University.findOne({
+                _id: universityId,
+                isActive: true
+            });
 
         if (!university) {
 
             return res.status(404).json({
+
                 success: false,
-                message: "University not found"
-            });
-        }
 
-
-        // ==================================================
-        // GET KCSE RESULT
-        // ==================================================
-
-        const kcseResult =
-            await Kcse.findOne({
-                student: studentId,
-                status: "Processed"
-            });
-
-        if (!kcseResult) {
-
-            return res.status(404).json({
-                success: false,
                 message:
-                    "Processed KCSE result not found"
+                    "University not found or inactive"
             });
         }
 
@@ -693,16 +864,23 @@ const getEligibleCoursesByUniversity = async (
 
         const universityCourses =
             await UniversityCourse.find({
-                university: universityId,
-                availability: true
-            }).populate("course");
+
+                university:
+                    universityId,
+
+                isAvailable:
+                    true
+
+            }).populate(
+                "course"
+            );
 
 
         const eligibleCourses = [];
 
 
         // ==================================================
-        // CHECK COURSES
+        // CHECK EACH COURSE
         // ==================================================
 
         for (
@@ -720,12 +898,21 @@ const getEligibleCoursesByUniversity = async (
 
 
             // ----------------------------------------------
-            // Overall grade
+            // COURSE MUST BE ACTIVE
+            // ----------------------------------------------
+
+            if (!course.isActive) {
+                continue;
+            }
+
+
+            // ----------------------------------------------
+            // OVERALL GRADE
             // ----------------------------------------------
 
             const overallEligible =
                 checkOverallGrade(
-                    kcseResult.meanGrade,
+                    student.totalGrade,
                     course.minimumGrade
                 );
 
@@ -736,13 +923,13 @@ const getEligibleCoursesByUniversity = async (
 
 
             // ----------------------------------------------
-            // Subject requirements
+            // SUBJECT REQUIREMENTS
             // ----------------------------------------------
 
             const subjectCheck =
                 checkSubjectRequirements(
-                    kcseResult.extractedSubjects,
-                    course.subjectRequirements
+                    student.subjects,
+                    course.requirements
                 );
 
 
@@ -752,7 +939,22 @@ const getEligibleCoursesByUniversity = async (
 
 
             // ----------------------------------------------
-            // Add eligible course
+            // INTERESTED COURSE
+            // ----------------------------------------------
+
+            const isInterested =
+                Array.isArray(
+                    student.interestedCourses
+                ) &&
+                student.interestedCourses.some(
+                    id =>
+                        id.toString() ===
+                        course._id.toString()
+                );
+
+
+            // ----------------------------------------------
+            // ADD COURSE
             // ----------------------------------------------
 
             eligibleCourses.push({
@@ -768,40 +970,63 @@ const getEligibleCoursesByUniversity = async (
                     courseName:
                         course.courseName,
 
+                    courseCode:
+                        course.courseCode,
+
+                    description:
+                        course.description,
+
                     duration:
                         course.duration,
-
-                    minimumGrade:
-                        course.minimumGrade,
 
                     department:
                         course.department,
 
+                    minimumGrade:
+                        course.minimumGrade,
+
                     mode:
                         course.mode
-
                 },
 
-                fees:
-                    universityCourse.fees,
+                isInterested,
+
+                campus:
+                    universityCourse.campus,
+
+                annualFees:
+                    universityCourse.annualFees,
+
+                applicationFee:
+                    universityCourse.applicationFee,
 
                 mode:
                     universityCourse.mode,
 
-                intakes:
-                    universityCourse.intakes,
+                intake:
+                    universityCourse.intake,
 
                 applicationLink:
                     universityCourse.applicationLink,
 
-                availability:
-                    universityCourse.availability,
+                isAvailable:
+                    universityCourse.isAvailable,
 
                 subjectRequirements:
                     subjectCheck.subjects
-
             });
         }
+
+
+        // ==================================================
+        // PRIORITIZE INTERESTED COURSES
+        // ==================================================
+
+        eligibleCourses.sort(
+            (a, b) =>
+                Number(b.isInterested) -
+                Number(a.isInterested)
+        );
 
 
         // ==================================================
@@ -826,19 +1051,32 @@ const getEligibleCoursesByUniversity = async (
                 county:
                     university.county,
 
+                country:
+                    university.country,
+
                 website:
                     university.website,
 
                 logo:
-                    university.logo
+                    university.logo,
 
+                description:
+                    university.description
             },
 
             student: {
 
-                meanGrade:
-                    kcseResult.meanGrade
+                id:
+                    student._id,
 
+                firstName:
+                    student.firstName,
+
+                lastName:
+                    student.lastName,
+
+                totalGrade:
+                    student.totalGrade
             },
 
             count:
@@ -864,7 +1102,6 @@ const getEligibleCoursesByUniversity = async (
 
             error:
                 error.message
-
         });
     }
 };
@@ -883,4 +1120,3 @@ module.exports = {
     getEligibleCoursesByUniversity
 
 };
-
