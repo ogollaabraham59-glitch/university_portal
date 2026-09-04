@@ -916,6 +916,7 @@ module.exports = {
     updateStudentPicture,
     getStudentById,
     registerStudent,
+    loginStudent,
     verifyStudent,
     activateStudent,
     deactivateStudent
