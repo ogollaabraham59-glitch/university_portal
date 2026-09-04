@@ -10,7 +10,8 @@ const {
     verifyStudent,
     activateStudent,
     deactivateStudent,
-    registerStudent
+    registerStudent,
+    loginStudent
 } = require("../controllers/StudentsController");
 
 const {
