@@ -16,7 +16,7 @@ const {
 const {
     auth,
     authorizeRoles,
-    loginStudent
+
 } = require("../midllewear/auth");
 
 const upload = require("../midllewear/uploadPicture");
