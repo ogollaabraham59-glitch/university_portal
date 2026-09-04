@@ -3,6 +3,22 @@ const {
     Student,
     Course
 } = require("../models/universityModel");
+const jwt = require("jsonwebtoken");
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
+const generateToken = (id, role, expiresIn = "5h") => {
+    return jwt.sign(
+        {
+            id,
+            role
+        },
+        JWT_SECRET,
+        {
+            expiresIn
+        }
+    );
+};
 
 
 // ======================================================
