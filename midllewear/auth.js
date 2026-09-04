@@ -15,7 +15,7 @@ const {
 const generateToken = (
     id,
     role,
-    expiresIn = "5h"
+    expiresIn = "4h"
 ) => {
 
 
@@ -125,162 +125,6 @@ const authorizeRoles =
     };
 
 
-// ======================================================
-// ADMIN LOGIN
-// ======================================================
-
-const loginAdmin = async (req, res) => {
-
-
-    try {
-
-        const {
-            email,
-            password
-        } = req.body;
-
-        // Validate input
-        if (!email || !password) {
-
-            return res.status(400).json({
-                success: false,
-                message:
-                    "Email and password are required"
-            });
-
-        }
-
-        // Find administrator
-        const admin =
-            await User.findOne({
-
-                email:
-                    email
-                        .toLowerCase()
-                        .trim(),
-
-                role: {
-                    $in: [
-                        "super_admin",
-                        "university_admin"
-                    ]
-                }
-
-            })
-                .populate(
-                    "university",
-                    "name location"
-                );
-
-
-        if (!admin) {
-
-            return res.status(401).json({
-                success: false,
-                message:
-                    "Invalid email or password"
-            });
-
-        }
-
-
-        // Check account status
-        if (!admin.isActive) {
-
-            return res.status(403).json({
-                success: false,
-                message:
-                    "Admin account has been deactivated"
-            });
-
-        }
-
-
-        // Compare password
-        const passwordMatch =
-            await bcrypt.compare(
-                password,
-                admin.password
-            );
-
-
-        if (!passwordMatch) {
-
-            return res.status(401).json({
-                success: false,
-                message:
-                    "Invalid email or password"
-            });
-
-        }
-
-
-        // Generate JWT token
-        const token =
-            generateToken(
-                admin._id,
-                admin.role
-            );
-
-
-        // Return response
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Admin login successful",
-
-            token,
-
-            admin: {
-
-                id: admin._id,
-
-                firstName:
-                    admin.firstName,
-
-                lastName:
-                    admin.lastName,
-
-                email:
-                    admin.email,
-
-                phone:
-                    admin.phone,
-
-                role:
-                    admin.role,
-
-                university:
-                    admin.university,
-
-                isVerified:
-                    admin.isVerified
-
-            }
-
-        });
-
-    } catch (error) {
-
-        console.error(
-            "Admin login error:",
-            error
-        );
-
-        return res.status(500).json({
-
-            success: false,
-
-            message:
-                "Server error while logging in"
-
-        });
-
-    }
-
-};
 
 // ======================================================
 // LOGOUT
@@ -480,7 +324,7 @@ const changePassword = async (
         });
 
     }
-    ```
+
 
 };
 
@@ -489,11 +333,11 @@ const changePassword = async (
 // ======================================================
 
 const forgotPassword = async (
-req,
-res
+    req,
+    res
 ) => {
 
-```
+
     try {
 
         const {
@@ -632,7 +476,7 @@ res
         });
 
     }
-    ```
+
 
 };
 
@@ -641,11 +485,11 @@ res
 // ======================================================
 
 const resetPassword = async (
-req,
-res
+    req,
+    res
 ) => {
 
-```
+
     try {
 
         const {
@@ -807,7 +651,7 @@ res
         });
 
     }
-    ```
+
 
 };
 
@@ -817,22 +661,22 @@ res
 
 module.exports = {
 
-```
+
     generateToken,
 
-        auth,
+    auth,
 
-        authorizeRoles,
+    authorizeRoles,
 
-        loginAdmin,
 
-        logout,
 
-        changePassword,
+    logout,
 
-        forgotPassword,
+    changePassword,
 
-        resetPassword
+    forgotPassword,
+
+    resetPassword
 
 
 };
