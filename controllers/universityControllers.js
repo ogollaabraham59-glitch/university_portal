@@ -1,5 +1,9 @@
+const mongoose = require("mongoose");
+
 const {
-    University
+    University,
+    User,
+    UniversityCourse
 } = require("../models/universityModel");
 
 
@@ -23,10 +27,6 @@ const createUniversity = async (req, res) => {
             facilities
         } = req.body;
 
-        // ------------------------------------------
-        // Required fields
-        // ------------------------------------------
-
         if (!name || !location) {
             return res.status(400).json({
                 success: false,
@@ -34,12 +34,10 @@ const createUniversity = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
-        // Check duplicate university
-        // ------------------------------------------
+        const universityName = name.trim();
 
         const existingUniversity = await University.findOne({
-            name: name.trim()
+            name: universityName
         });
 
         if (existingUniversity) {
@@ -49,12 +47,8 @@ const createUniversity = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
-        // Create university
-        // ------------------------------------------
-
         const university = await University.create({
-            name: name.trim(),
+            name: universityName,
             location: location.trim(),
             county: county ? county.trim() : "",
             country: country ? country.trim() : "Kenya",
@@ -64,9 +58,9 @@ const createUniversity = async (req, res) => {
             email: email ? email.toLowerCase().trim() : "",
             phone: phone ? phone.trim() : "",
             description: description ? description.trim() : "",
-            facilities: Array.isArray(facilities)
-                ? facilities
-                : []
+            facilities: Array.isArray(facilities) ? facilities : [],
+            verified: false,
+            isActive: true
         });
 
         return res.status(201).json({
@@ -88,7 +82,7 @@ const createUniversity = async (req, res) => {
 
 
 // ======================================================
-// 2. GET ALL UNIVERSITIES
+// 2. GET ALL ACTIVE UNIVERSITIES
 // ======================================================
 
 const getUniversities = async (req, res) => {
@@ -125,6 +119,13 @@ const getUniversityById = async (req, res) => {
     try {
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
+
         const university = await University.findById(id);
 
         if (!university) {
@@ -159,6 +160,55 @@ const updateUniversity = async (req, res) => {
     try {
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
+
+        const university = await University.findById(id);
+
+        if (!university) {
+            return res.status(404).json({
+                success: false,
+                message: "University not found"
+            });
+        }
+
+        // ------------------------------------------
+        // University admin ownership check
+        // ------------------------------------------
+
+        if (req.user.role === "university_admin") {
+            const admin = await User.findById(req.user.id);
+
+            if (!admin) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Administrator account not found"
+                });
+            }
+
+            if (!admin.university) {
+                return res.status(403).json({
+                    success: false,
+                    message: "No university is assigned to this administrator"
+                });
+            }
+
+            if (
+                admin.university.toString() !==
+                university._id.toString()
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        "Access denied. You can only update your own university."
+                });
+            }
+        }
+
         const {
             name,
             location,
@@ -173,38 +223,41 @@ const updateUniversity = async (req, res) => {
             facilities
         } = req.body;
 
-        const university = await University.findById(id);
-
-        if (!university) {
-            return res.status(404).json({
-                success: false,
-                message: "University not found"
-            });
-        }
-
         // ------------------------------------------
-        // Check duplicate name
+        // Update name
         // ------------------------------------------
 
-        if (name && name.trim() !== university.name) {
+        if (name !== undefined) {
+            const universityName = name.trim();
 
-            const existingUniversity = await University.findOne({
-                name: name.trim(),
-                _id: { $ne: id }
-            });
-
-            if (existingUniversity) {
-                return res.status(409).json({
+            if (!universityName) {
+                return res.status(400).json({
                     success: false,
-                    message: "Another university already has this name"
+                    message: "University name cannot be empty"
                 });
             }
 
-            university.name = name.trim();
+            if (universityName !== university.name) {
+                const existingUniversity =
+                    await University.findOne({
+                        name: universityName,
+                        _id: { $ne: id }
+                    });
+
+                if (existingUniversity) {
+                    return res.status(409).json({
+                        success: false,
+                        message:
+                            "Another university already has this name"
+                    });
+                }
+
+                university.name = universityName;
+            }
         }
 
         // ------------------------------------------
-        // Update fields
+        // Update other fields
         // ------------------------------------------
 
         if (location !== undefined) {
@@ -220,6 +273,14 @@ const updateUniversity = async (req, res) => {
         }
 
         if (universityType !== undefined) {
+            if (!["Public", "Private"].includes(universityType)) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "University type must be Public or Private"
+                });
+            }
+
             university.universityType = universityType;
         }
 
@@ -244,7 +305,6 @@ const updateUniversity = async (req, res) => {
         }
 
         if (facilities !== undefined) {
-
             if (!Array.isArray(facilities)) {
                 return res.status(400).json({
                     success: false,
@@ -283,6 +343,13 @@ const deleteUniversity = async (req, res) => {
     try {
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
+
         const university = await University.findById(id);
 
         if (!university) {
@@ -292,11 +359,34 @@ const deleteUniversity = async (req, res) => {
             });
         }
 
-        await University.findByIdAndDelete(id);
+        // ------------------------------------------
+        // Prevent deleting university with courses
+        // ------------------------------------------
+
+        const linkedCourses = await UniversityCourse.countDocuments({
+            university: id
+        });
+
+        if (linkedCourses > 0) {
+            return res.status(409).json({
+                success: false,
+                message:
+                    "Cannot delete this university because it has courses assigned to it. Deactivate it instead."
+            });
+        }
+
+        // ------------------------------------------
+        // Soft delete
+        // ------------------------------------------
+
+        university.isActive = false;
+
+        await university.save();
 
         return res.status(200).json({
             success: true,
-            message: "University deleted successfully"
+            message: "University deactivated successfully",
+            university
         });
 
     } catch (error) {
@@ -318,6 +408,13 @@ const deleteUniversity = async (req, res) => {
 const verifyUniversity = async (req, res) => {
     try {
         const { id } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
 
         const university = await University.findById(id);
 
@@ -358,6 +455,13 @@ const activateUniversity = async (req, res) => {
     try {
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
+
         const university = await University.findById(id);
 
         if (!university) {
@@ -397,6 +501,13 @@ const deactivateUniversity = async (req, res) => {
     try {
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
+
         const university = await University.findById(id);
 
         if (!university) {
@@ -421,7 +532,8 @@ const deactivateUniversity = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            message: "Server error while deactivating university"
+            message: "Server error while deactivating university",
+            error: error.message
         });
     }
 };
@@ -440,10 +552,6 @@ const searchUniversities = async (req, res) => {
             universityType
         } = req.query;
 
-        // ------------------------------------------
-        // Build search filter
-        // ------------------------------------------
-
         const filter = {
             isActive: true
         };
@@ -453,22 +561,27 @@ const searchUniversities = async (req, res) => {
         // ------------------------------------------
 
         if (search) {
+            const safeSearch = search.trim().replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+
             filter.$or = [
                 {
                     name: {
-                        $regex: search,
+                        $regex: safeSearch,
                         $options: "i"
                     }
                 },
                 {
                     location: {
-                        $regex: search,
+                        $regex: safeSearch,
                         $options: "i"
                     }
                 },
                 {
                     county: {
-                        $regex: search,
+                        $regex: safeSearch,
                         $options: "i"
                     }
                 }
@@ -476,23 +589,33 @@ const searchUniversities = async (req, res) => {
         }
 
         // ------------------------------------------
-        // County filter
+        // County
         // ------------------------------------------
 
         if (county) {
+            const safeCounty = county.trim().replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+
             filter.county = {
-                $regex: county,
+                $regex: safeCounty,
                 $options: "i"
             };
         }
 
         // ------------------------------------------
-        // Location filter
+        // Location
         // ------------------------------------------
 
         if (location) {
+            const safeLocation = location.trim().replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+
             filter.location = {
-                $regex: location,
+                $regex: safeLocation,
                 $options: "i"
             };
         }
@@ -502,12 +625,16 @@ const searchUniversities = async (req, res) => {
         // ------------------------------------------
 
         if (universityType) {
+            if (!["Public", "Private"].includes(universityType)) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "University type must be Public or Private"
+                });
+            }
+
             filter.universityType = universityType;
         }
-
-        // ------------------------------------------
-        // Execute query
-        // ------------------------------------------
 
         const universities = await University.find(filter)
             .sort({
@@ -533,7 +660,7 @@ const searchUniversities = async (req, res) => {
 
 
 // ======================================================
-// EXPORT CONTROLLERS
+// EXPORT
 // ======================================================
 
 module.exports = {

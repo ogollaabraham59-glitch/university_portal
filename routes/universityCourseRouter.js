@@ -9,16 +9,22 @@ const {
     getUniversityCourseById,
     updateUniversityCourse,
     removeCourseFromUniversity,
-    updateFees,
-    updateIntakes,
+    updateAnnualFees,
+    updateIntake,
     updateApplicationLink,
     updateAvailability
 } = require("../controllers/universityCourseController");
 
 const {
     auth,
-    authorizeRoles
+    authorizeRoles,
+
 } = require("../midllewear/auth");
+
+const {
+
+    checkUniversityOwnership
+} = require("../midllewear/universityOwnership");
 
 
 // ======================================================
@@ -39,7 +45,7 @@ router.get(
 );
 
 
-// Get specific university-course
+// Get specific university-course relationship
 router.get(
     "/:id",
     getUniversityCourseById
@@ -50,7 +56,11 @@ router.get(
 // ADMIN ROUTES
 // ======================================================
 
+
+// ------------------------------------------------------
 // Add course to university
+// ------------------------------------------------------
+
 router.post(
     "/",
     auth,
@@ -58,11 +68,15 @@ router.post(
         "super_admin",
         "university_admin"
     ),
+    checkUniversityOwnership,
     addCourseToUniversity
 );
 
 
+// ------------------------------------------------------
 // Update university course
+// ------------------------------------------------------
+
 router.put(
     "/:id",
     auth,
@@ -70,11 +84,15 @@ router.put(
         "super_admin",
         "university_admin"
     ),
+    checkUniversityOwnership,
     updateUniversityCourse
 );
 
 
+// ------------------------------------------------------
 // Remove course from university
+// ------------------------------------------------------
+
 router.delete(
     "/:id",
     auth,
@@ -82,11 +100,15 @@ router.delete(
         "super_admin",
         "university_admin"
     ),
+    checkUniversityOwnership,
     removeCourseFromUniversity
 );
 
 
-// Update fees
+// ------------------------------------------------------
+// Update annual fees
+// ------------------------------------------------------
+
 router.patch(
     "/:id/fees",
     auth,
@@ -94,23 +116,31 @@ router.patch(
         "super_admin",
         "university_admin"
     ),
-    updateFees
+    checkUniversityOwnership,
+    updateAnnualFees
 );
 
 
-// Update intakes
+// ------------------------------------------------------
+// Update intake
+// ------------------------------------------------------
+
 router.patch(
-    "/:id/intakes",
+    "/:id/intake",
     auth,
     authorizeRoles(
         "super_admin",
         "university_admin"
     ),
-    updateIntakes
+    checkUniversityOwnership,
+    updateIntake
 );
 
 
+// ------------------------------------------------------
 // Update application link
+// ------------------------------------------------------
+
 router.patch(
     "/:id/application-link",
     auth,
@@ -118,11 +148,15 @@ router.patch(
         "super_admin",
         "university_admin"
     ),
+    checkUniversityOwnership,
     updateApplicationLink
 );
 
 
+// ------------------------------------------------------
 // Update availability
+// ------------------------------------------------------
+
 router.patch(
     "/:id/availability",
     auth,
@@ -130,6 +164,7 @@ router.patch(
         "super_admin",
         "university_admin"
     ),
+    checkUniversityOwnership,
     updateAvailability
 );
 

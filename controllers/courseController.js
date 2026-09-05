@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const {
     Course,
     University,
@@ -6,10 +8,20 @@ const {
 
 
 // ======================================================
+// HELPER: CHECK VALID MONGODB ID
+// ======================================================
+
+const isValidId = (id) => {
+    return mongoose.Types.ObjectId.isValid(id);
+};
+
+
+// ======================================================
 // HELPER: GET COURSE WITH UNIVERSITY OFFERINGS
 // ======================================================
 
 const getCourseWithOfferings = async (courseId) => {
+
     const course = await Course.findById(courseId)
         .populate("category", "name description");
 
@@ -25,7 +37,9 @@ const getCourseWithOfferings = async (courseId) => {
             "university",
             "name location county country website email phone logo"
         )
-        .sort({ annualFees: 1 });
+        .sort({
+            annualFees: 1
+        });
 
     return {
         ...course.toObject(),
@@ -76,6 +90,18 @@ const createCourse = async (req, res) => {
 
 
         // ==========================================
+        // VALIDATE UNIVERSITY ID
+        // ==========================================
+
+        if (!isValidId(university)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
+
+
+        // ==========================================
         // CHECK UNIVERSITY
         // ==========================================
 
@@ -90,6 +116,48 @@ const createCourse = async (req, res) => {
         }
 
 
+        if (!universityExists.isActive) {
+            return res.status(400).json({
+                success: false,
+                message: "This university is inactive"
+            });
+        }
+
+
+        // ==========================================
+        // VALIDATE FEES
+        // ==========================================
+
+        if (
+            annualFees !== undefined &&
+            annualFees !== null &&
+            (
+                Number.isNaN(Number(annualFees)) ||
+                Number(annualFees) < 0
+            )
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Annual fees must be a valid positive number"
+            });
+        }
+
+
+        if (
+            applicationFee !== undefined &&
+            applicationFee !== null &&
+            (
+                Number.isNaN(Number(applicationFee)) ||
+                Number(applicationFee) < 0
+            )
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Application fee must be a valid positive number"
+            });
+        }
+
+
         // ==========================================
         // CHECK IF COURSE ALREADY EXISTS
         // ==========================================
@@ -100,7 +168,7 @@ const createCourse = async (req, res) => {
 
 
         // ==========================================
-        // CREATE COURSE IF IT DOES NOT EXIST
+        // CREATE COURSE
         // ==========================================
 
         if (!course) {
@@ -119,8 +187,9 @@ const createCourse = async (req, res) => {
 
         } else {
 
-            // Optional: update general course information
-            // when the course already exists.
+            // ==========================================
+            // UPDATE GENERAL COURSE INFORMATION
+            // ==========================================
 
             if (courseCode !== undefined) {
                 course.courseCode = courseCode;
@@ -159,7 +228,7 @@ const createCourse = async (req, res) => {
 
 
         // ==========================================
-        // CHECK UNIVERSITY-COURSE RELATIONSHIP
+        // CHECK UNIVERSITY + COURSE RELATIONSHIP
         // ==========================================
 
         const existingUniversityCourse =
@@ -178,7 +247,7 @@ const createCourse = async (req, res) => {
 
 
         // ==========================================
-        // CREATE UNIVERSITY-COURSE RELATIONSHIP
+        // CREATE UNIVERSITY COURSE
         // ==========================================
 
         const universityCourse =
@@ -186,11 +255,18 @@ const createCourse = async (req, res) => {
                 university,
                 course: course._id,
                 campus,
-                annualFees,
-                applicationFee,
+                annualFees:
+                    annualFees !== undefined
+                        ? Number(annualFees)
+                        : undefined,
+                applicationFee:
+                    applicationFee !== undefined
+                        ? Number(applicationFee)
+                        : undefined,
                 mode,
                 intake,
-                applicationLink
+                applicationLink,
+                isAvailable: true
             });
 
 
@@ -207,7 +283,8 @@ const createCourse = async (req, res) => {
                     "name location county country website email phone logo"
                 )
                 .populate(
-                    "course"
+                    "course",
+                    "courseName courseCode description duration department category minimumGrade requirements mode"
                 );
 
 
@@ -246,8 +323,13 @@ const createCourse = async (req, res) => {
 const getCourses = async (req, res) => {
     try {
 
-        // Get all courses
-        const courses = await Course.find()
+        // ==========================================
+        // GET ACTIVE COURSES
+        // ==========================================
+
+        const courses = await Course.find({
+            isActive: true
+        })
             .populate(
                 "category",
                 "name description"
@@ -257,14 +339,25 @@ const getCourses = async (req, res) => {
             });
 
 
-        // Get university offerings
+        // ==========================================
+        // GET COURSE IDS
+        // ==========================================
+
         const courseIds = courses.map(
             course => course._id
         );
 
+
+        // ==========================================
+        // GET ACTIVE UNIVERSITY OFFERINGS
+        // ==========================================
+
         const offerings =
             await UniversityCourse.find({
-                course: { $in: courseIds }
+                course: {
+                    $in: courseIds
+                },
+                isAvailable: true
             })
                 .populate(
                     "university",
@@ -275,7 +368,10 @@ const getCourses = async (req, res) => {
                 });
 
 
-        // Attach universities to each course
+        // ==========================================
+        // ATTACH UNIVERSITIES TO COURSES
+        // ==========================================
+
         const coursesWithUniversities =
             courses.map(course => {
 
@@ -293,6 +389,10 @@ const getCourses = async (req, res) => {
                 };
             });
 
+
+        // ==========================================
+        // RESPONSE
+        // ==========================================
 
         return res.status(200).json({
             success: true,
@@ -328,6 +428,18 @@ const getCourseById = async (req, res) => {
 
 
         // ==========================================
+        // VALIDATE ID
+        // ==========================================
+
+        if (!isValidId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid course ID"
+            });
+        }
+
+
+        // ==========================================
         // GET COURSE
         // ==========================================
 
@@ -347,12 +459,13 @@ const getCourseById = async (req, res) => {
 
 
         // ==========================================
-        // GET UNIVERSITIES OFFERING COURSE
+        // GET ACTIVE UNIVERSITY OFFERINGS
         // ==========================================
 
         const universityCourses =
             await UniversityCourse.find({
-                course: id
+                course: id,
+                isAvailable: true
             })
                 .populate(
                     "university",
@@ -404,6 +517,18 @@ const updateCourse = async (req, res) => {
 
         const { id } = req.params;
 
+        // ==========================================
+        // VALIDATE ID
+        // ==========================================
+
+        if (!isValidId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid course ID"
+            });
+        }
+
+
         const {
             courseName,
             courseCode,
@@ -433,12 +558,15 @@ const updateCourse = async (req, res) => {
 
 
         // ==========================================
-        // UPDATE COURSE INFORMATION
+        // COURSE NAME
         // ==========================================
 
         if (courseName !== undefined) {
 
-            if (!courseName.trim()) {
+            if (
+                typeof courseName !== "string" ||
+                !courseName.trim()
+            ) {
                 return res.status(400).json({
                     success: false,
                     message:
@@ -446,70 +574,13 @@ const updateCourse = async (req, res) => {
                 });
             }
 
-            course.courseName =
-                courseName.trim();
-        }
-
-
-        if (courseCode !== undefined) {
-            course.courseCode =
-                courseCode;
-        }
-
-
-        if (description !== undefined) {
-            course.description =
-                description;
-        }
-
-
-        if (duration !== undefined) {
-            course.duration =
-                duration;
-        }
-
-
-        if (department !== undefined) {
-            course.department =
-                department;
-        }
-
-
-        if (category !== undefined) {
-            course.category =
-                category;
-        }
-
-
-        if (minimumGrade !== undefined) {
-            course.minimumGrade =
-                minimumGrade;
-        }
-
-
-        if (requirements !== undefined) {
-            course.requirements =
-                requirements;
-        }
-
-
-        if (mode !== undefined) {
-            course.mode =
-                mode;
-        }
-
-
-        // ==========================================
-        // CHECK DUPLICATE COURSE NAME
-        // ==========================================
-
-        if (courseName !== undefined) {
 
             const duplicateCourse =
                 await Course.findOne({
-                    courseName:
-                        course.courseName,
-                    _id: { $ne: id }
+                    courseName: courseName.trim(),
+                    _id: {
+                        $ne: id
+                    }
                 });
 
             if (duplicateCourse) {
@@ -519,11 +590,72 @@ const updateCourse = async (req, res) => {
                         "A course with this name already exists"
                 });
             }
+
+
+            course.courseName =
+                courseName.trim();
         }
 
 
         // ==========================================
-        // SAVE
+        // UPDATE OPTIONAL FIELDS
+        // ==========================================
+
+        if (courseCode !== undefined) {
+            course.courseCode =
+                courseCode;
+        }
+
+        if (description !== undefined) {
+            course.description =
+                description;
+        }
+
+        if (duration !== undefined) {
+            course.duration =
+                duration;
+        }
+
+        if (department !== undefined) {
+            course.department =
+                department;
+        }
+
+        if (category !== undefined) {
+            course.category =
+                category;
+        }
+
+        if (minimumGrade !== undefined) {
+
+            if (
+                typeof minimumGrade !== "string" ||
+                !minimumGrade.trim()
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Minimum grade cannot be empty"
+                });
+            }
+
+            course.minimumGrade =
+                minimumGrade.trim();
+        }
+
+        if (requirements !== undefined) {
+            course.requirements =
+                requirements;
+        }
+
+        if (mode !== undefined) {
+            course.mode =
+                mode;
+        }
+
+
+        // ==========================================
+        // SAVE COURSE
         // ==========================================
 
         await course.save();
@@ -552,8 +684,15 @@ const updateCourse = async (req, res) => {
                 .populate(
                     "university",
                     "name location county country website email phone logo"
-                );
+                )
+                .sort({
+                    annualFees: 1
+                });
 
+
+        // ==========================================
+        // RESPONSE
+        // ==========================================
 
         return res.status(200).json({
             success: true,
@@ -596,6 +735,18 @@ const deleteCourse = async (req, res) => {
 
 
         // ==========================================
+        // VALIDATE ID
+        // ==========================================
+
+        if (!isValidId(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid course ID"
+            });
+        }
+
+
+        // ==========================================
         // FIND COURSE
         // ==========================================
 
@@ -626,6 +777,10 @@ const deleteCourse = async (req, res) => {
 
         await Course.findByIdAndDelete(id);
 
+
+        // ==========================================
+        // SUCCESS
+        // ==========================================
 
         return res.status(200).json({
             success: true,
@@ -662,6 +817,18 @@ const getCoursesByUniversity = async (req, res) => {
 
 
         // ==========================================
+        // VALIDATE ID
+        // ==========================================
+
+        if (!isValidId(universityId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
+
+
+        // ==========================================
         // CHECK UNIVERSITY
         // ==========================================
 
@@ -680,12 +847,13 @@ const getCoursesByUniversity = async (req, res) => {
 
 
         // ==========================================
-        // GET UNIVERSITY-COURSE RELATIONSHIPS
+        // GET UNIVERSITY COURSES
         // ==========================================
 
         const universityCourses =
             await UniversityCourse.find({
-                university: universityId
+                university: universityId,
+                isAvailable: true
             })
                 .populate(
                     "course"
@@ -693,11 +861,28 @@ const getCoursesByUniversity = async (req, res) => {
                 .populate(
                     "university",
                     "name location county country website logo"
-                )
-                .sort({
-                    "course.courseName": 1
-                });
+                );
 
+
+        // ==========================================
+        // SORT AFTER POPULATION
+        // ==========================================
+
+        universityCourses.sort((a, b) => {
+
+            const courseA =
+                a.course?.courseName || "";
+
+            const courseB =
+                b.course?.courseName || "";
+
+            return courseA.localeCompare(courseB);
+        });
+
+
+        // ==========================================
+        // RESPONSE
+        // ==========================================
 
         return res.status(200).json({
             success: true,
@@ -758,7 +943,9 @@ const searchCourses = async (req, res) => {
         // COURSE FILTER
         // ==========================================
 
-        const courseFilter = {};
+        const courseFilter = {
+            isActive: true
+        };
 
 
         // ==========================================
@@ -767,18 +954,24 @@ const searchCourses = async (req, res) => {
 
         if (search) {
 
+            const escapedSearch =
+                search.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                );
+
             courseFilter.$or = [
 
                 {
                     courseName: {
-                        $regex: search,
+                        $regex: escapedSearch,
                         $options: "i"
                     }
                 },
 
                 {
                     department: {
-                        $regex: search,
+                        $regex: escapedSearch,
                         $options: "i"
                     }
                 }
@@ -793,15 +986,21 @@ const searchCourses = async (req, res) => {
 
         if (department) {
 
+            const escapedDepartment =
+                department.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                );
+
             courseFilter.department = {
-                $regex: department,
+                $regex: escapedDepartment,
                 $options: "i"
             };
         }
 
 
         // ==========================================
-        // MINIMUM GRADE
+        // MINIMUM GRADE SEARCH
         // ==========================================
 
         if (minimumGrade) {
@@ -843,9 +1042,12 @@ const searchCourses = async (req, res) => {
         // ==========================================
 
         const universityCourseFilter = {
+
             course: {
                 $in: courseIds
-            }
+            },
+
+            isAvailable: true
         };
 
 
@@ -854,6 +1056,14 @@ const searchCourses = async (req, res) => {
         // ==========================================
 
         if (university) {
+
+            if (!isValidId(university)) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Invalid university ID"
+                });
+            }
 
             universityCourseFilter.university =
                 university;
@@ -882,21 +1092,61 @@ const searchCourses = async (req, res) => {
 
             universityCourseFilter.annualFees = {};
 
+
             if (minFees !== undefined) {
+
+                const minimum =
+                    Number(minFees);
+
+                if (
+                    Number.isNaN(minimum) ||
+                    minimum < 0
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Invalid minimum fees"
+                    });
+                }
 
                 universityCourseFilter
                     .annualFees
-                    .$gte =
-                    Number(minFees);
+                    .$gte = minimum;
             }
 
 
             if (maxFees !== undefined) {
 
+                const maximum =
+                    Number(maxFees);
+
+                if (
+                    Number.isNaN(maximum) ||
+                    maximum < 0
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message:
+                            "Invalid maximum fees"
+                    });
+                }
+
                 universityCourseFilter
                     .annualFees
-                    .$lte =
-                    Number(maxFees);
+                    .$lte = maximum;
+            }
+
+
+            if (
+                minFees !== undefined &&
+                maxFees !== undefined &&
+                Number(minFees) > Number(maxFees)
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Minimum fees cannot be greater than maximum fees"
+                });
             }
         }
 
@@ -914,7 +1164,8 @@ const searchCourses = async (req, res) => {
                     "name location county country website logo"
                 )
                 .populate(
-                    "course"
+                    "course",
+                    "courseName courseCode description duration department category minimumGrade requirements mode"
                 )
                 .sort({
                     annualFees: 1

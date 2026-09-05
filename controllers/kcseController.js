@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const {
     KcseResult,
     Student
@@ -10,16 +12,10 @@ const {
 
 const uploadResultSlip = async (req, res) => {
     try {
-        // ------------------------------------------
         // Student ID comes from JWT
-        // ------------------------------------------
-
         const studentId = req.user.id;
 
-        // ------------------------------------------
-        // Get uploaded file
-        // ------------------------------------------
-
+        // Check uploaded file
         if (!req.file) {
             return res.status(400).json({
                 success: false,
@@ -27,10 +23,7 @@ const uploadResultSlip = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
         // Check student
-        // ------------------------------------------
-
         const student = await Student.findById(studentId);
 
         if (!student) {
@@ -40,11 +33,15 @@ const uploadResultSlip = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
-        // Check for existing result
-        // ------------------------------------------
+        if (!student.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: "Your student account has been deactivated"
+            });
+        }
 
-        const existingResult = await Kcse.findOne({
+        // Check for existing result
+        const existingResult = await KcseResult.findOne({
             student: studentId
         });
 
@@ -56,17 +53,11 @@ const uploadResultSlip = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
-        // File path
-        // ------------------------------------------
-
+        // Uploaded file path
         const resultSlip = req.file.path;
 
-        // ------------------------------------------
         // Create result
-        // ------------------------------------------
-
-        const result = await Kcse.create({
+        const result = await KcseResult.create({
             student: studentId,
             resultSlip,
             status: "Pending",
@@ -98,13 +89,9 @@ const uploadResultSlip = async (req, res) => {
 
 const getMyResult = async (req, res) => {
     try {
-        // ------------------------------------------
-        // Get logged-in student ID from JWT
-        // ------------------------------------------
-
         const studentId = req.user.id;
 
-        const result = await Kcse.findOne({
+        const result = await KcseResult.findOne({
             student: studentId
         }).populate(
             "student",
@@ -143,7 +130,14 @@ const getResultById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await Kcse.findById(id)
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid KCSE result ID"
+            });
+        }
+
+        const result = await KcseResult.findById(id)
             .populate(
                 "student",
                 "firstName lastName email phone indexNo yearOfCompletion"
@@ -153,6 +147,17 @@ const getResultById = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "KCSE result not found"
+            });
+        }
+
+        // Student can only access their own result
+        if (
+            req.user.role === "student" &&
+            result.student._id.toString() !== req.user.id.toString()
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. You can only view your own KCSE result."
             });
         }
 
@@ -180,16 +185,17 @@ const getResultById = async (req, res) => {
 const processResult = async (req, res) => {
     try {
         const { id } = req.params;
+        const { extractedSubjects } = req.body;
 
-        const {
-            extractedSubjects
-        } = req.body;
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid KCSE result ID"
+            });
+        }
 
-        // ------------------------------------------
         // Find result
-        // ------------------------------------------
-
-        const result = await Kcse.findById(id);
+        const result = await KcseResult.findById(id);
 
         if (!result) {
             return res.status(404).json({
@@ -198,40 +204,23 @@ const processResult = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
         // Validate subjects
-        // ------------------------------------------
-
-        if (
-            !extractedSubjects ||
-            !Array.isArray(extractedSubjects)
-        ) {
+        if (!Array.isArray(extractedSubjects)) {
             return res.status(400).json({
                 success: false,
-                message:
-                    "Extracted subjects must be provided as an array"
+                message: "Extracted subjects must be provided as an array"
             });
         }
 
-        // ------------------------------------------
         // Save extracted subjects
-        // ------------------------------------------
-
         result.extractedSubjects = extractedSubjects;
 
-        // ------------------------------------------
         // Mark as processed
-        // ------------------------------------------
-
         result.status = "Processed";
 
         await result.save();
 
-        // ------------------------------------------
-        // Return populated result
-        // ------------------------------------------
-
-        const processedResult = await Kcse.findById(id)
+        const processedResult = await KcseResult.findById(id)
             .populate(
                 "student",
                 "firstName lastName email indexNo yearOfCompletion"
@@ -269,11 +258,15 @@ const updateResult = async (req, res) => {
             status
         } = req.body;
 
-        // ------------------------------------------
-        // Find result
-        // ------------------------------------------
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid KCSE result ID"
+            });
+        }
 
-        const result = await Kcse.findById(id);
+        // Find result
+        const result = await KcseResult.findById(id);
 
         if (!result) {
             return res.status(404).json({
@@ -282,44 +275,32 @@ const updateResult = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
         // Update result slip
-        // ------------------------------------------
-
         if (resultSlip !== undefined) {
             result.resultSlip = resultSlip;
         }
 
-        // ------------------------------------------
         // Update extracted subjects
-        // ------------------------------------------
-
         if (extractedSubjects !== undefined) {
 
             if (!Array.isArray(extractedSubjects)) {
                 return res.status(400).json({
                     success: false,
-                    message:
-                        "Extracted subjects must be an array"
+                    message: "Extracted subjects must be an array"
                 });
             }
 
             result.extractedSubjects = extractedSubjects;
         }
 
-        // ------------------------------------------
         // Update status
-        // ------------------------------------------
-
         if (status !== undefined) {
 
-            if (
-                !["Pending", "Processed"].includes(status)
-            ) {
+            if (!["Pending", "Processed", "Failed"].includes(status)) {
                 return res.status(400).json({
                     success: false,
                     message:
-                        "Status must be Pending or Processed"
+                        "Status must be Pending, Processed, or Failed"
                 });
             }
 
@@ -328,7 +309,7 @@ const updateResult = async (req, res) => {
 
         await result.save();
 
-        const updatedResult = await Kcse.findById(id)
+        const updatedResult = await KcseResult.findById(id)
             .populate(
                 "student",
                 "firstName lastName email indexNo yearOfCompletion"
@@ -360,7 +341,14 @@ const deleteResult = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await Kcse.findById(id);
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid KCSE result ID"
+            });
+        }
+
+        const result = await KcseResult.findById(id);
 
         if (!result) {
             return res.status(404).json({
@@ -369,7 +357,7 @@ const deleteResult = async (req, res) => {
             });
         }
 
-        await Kcse.findByIdAndDelete(id);
+        await KcseResult.findByIdAndDelete(id);
 
         return res.status(200).json({
             success: true,
@@ -396,7 +384,14 @@ const retryProcessing = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const result = await Kcse.findById(id);
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid KCSE result ID"
+            });
+        }
+
+        const result = await KcseResult.findById(id);
 
         if (!result) {
             return res.status(404).json({
@@ -405,33 +400,23 @@ const retryProcessing = async (req, res) => {
             });
         }
 
-        // ------------------------------------------
         // Reset processing state
-        // ------------------------------------------
-
         result.status = "Pending";
         result.extractedSubjects = [];
 
         await result.save();
 
         /*
-         * At this point you would normally send the
-         * result slip to your OCR/AI processing service.
+         * Later, you can connect an OCR/AI service here.
          *
          * Example:
          *
          * await processKcseDocument(result.resultSlip);
-         *
-         * The processing service would then update:
-         *
-         * extractedSubjects
-         * status = "Processed"
          */
 
         return res.status(200).json({
             success: true,
-            message:
-                "KCSE result has been queued for processing",
+            message: "KCSE result has been queued for processing",
             result
         });
 

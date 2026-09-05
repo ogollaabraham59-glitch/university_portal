@@ -8,6 +8,7 @@ const {
     Student
 } = require("../models/universityModel");
 
+
 // ======================================================
 // HELPER: GENERATE JWT TOKEN
 // ======================================================
@@ -17,7 +18,6 @@ const generateToken = (
     role,
     expiresIn = "4h"
 ) => {
-
 
     return jwt.sign(
         {
@@ -29,9 +29,8 @@ const generateToken = (
             expiresIn
         }
     );
-
-
 };
+
 
 // ======================================================
 // MIDDLEWARE: AUTHENTICATION
@@ -39,13 +38,11 @@ const generateToken = (
 
 const auth = async (req, res, next) => {
 
-
     try {
 
-        const authHeader =
-            req.headers.authorization;
+        const authHeader = req.headers.authorization;
 
-        // Check if token exists
+        // Check token
         if (
             !authHeader ||
             !authHeader.startsWith("Bearer ")
@@ -60,18 +57,28 @@ const auth = async (req, res, next) => {
         }
 
         // Extract token
-        const token =
-            authHeader.split(" ")[1];
+        const token = authHeader.split(" ")[1];
+
+        if (!token) {
+
+            return res.status(401).json({
+                success: false,
+                message: "Authentication token is missing."
+            });
+
+        }
 
         // Verify token
-        const decoded =
-            jwt.verify(
-                token,
-                JWT_SECRET
-            );
+        const decoded = jwt.verify(
+            token,
+            JWT_SECRET
+        );
 
-        // Attach user information to request
-        req.user = decoded;
+        // Store authenticated user information
+        req.user = {
+            id: decoded.id,
+            role: decoded.role
+        };
 
         next();
 
@@ -84,46 +91,188 @@ const auth = async (req, res, next) => {
 
         return res.status(401).json({
             success: false,
-            message:
-                "Invalid or expired token."
+            message: "Invalid or expired token."
         });
 
     }
-
-
 };
 
+
 // ======================================================
-// MIDDLEWARE: AUTHORIZATION
+// MIDDLEWARE: ROLE AUTHORIZATION
 // ======================================================
 
-const authorizeRoles =
-    (...allowedRoles) => {
+const authorizeRoles = (...allowedRoles) => {
 
+    return (req, res, next) => {
 
-        return (req, res, next) => {
+        if (!req.user) {
 
-            if (
-                !req.user ||
-                !allowedRoles.includes(
-                    req.user.role
-                )
-            ) {
+            return res.status(401).json({
+                success: false,
+                message: "User is not authenticated."
+            });
 
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        "Forbidden: You do not have permission to access this resource."
-                });
+        }
 
-            }
+        if (
+            !allowedRoles.includes(req.user.role)
+        ) {
 
-            next();
+            return res.status(403).json({
+                success: false,
+                message:
+                    "Forbidden: You do not have permission to access this resource."
+            });
 
-        };
+        }
 
+        next();
     };
+};
 
+
+// ======================================================
+// MIDDLEWARE: UNIVERSITY ADMIN OWNERSHIP
+// ======================================================
+//
+// This ensures a university_admin can only manage
+// the university assigned to their account.
+//
+// super_admin is allowed to manage any university.
+//
+
+const authorizeUniversity = async (
+    req,
+    res,
+    next
+) => {
+
+    try {
+
+        if (!req.user) {
+
+            return res.status(401).json({
+                success: false,
+                message: "User is not authenticated."
+            });
+
+        }
+
+        // Super admin can access any university
+        if (
+            req.user.role === "super_admin"
+        ) {
+
+            return next();
+
+        }
+
+        // Only university admins need ownership checking
+        if (
+            req.user.role !== "university_admin"
+        ) {
+
+            return res.status(403).json({
+                success: false,
+                message:
+                    "Only university administrators can access this resource."
+            });
+
+        }
+
+        // Get admin account
+        const admin = await User.findById(
+            req.user.id
+        );
+
+        if (!admin) {
+
+            return res.status(404).json({
+                success: false,
+                message: "Administrator account not found."
+            });
+
+        }
+
+        if (!admin.isActive) {
+
+            return res.status(403).json({
+                success: false,
+                message: "Administrator account is inactive."
+            });
+
+        }
+
+        // University must be assigned
+        if (!admin.university) {
+
+            return res.status(403).json({
+                success: false,
+                message:
+                    "No university is assigned to this administrator."
+            });
+
+        }
+
+        /*
+         * We support university ID coming from:
+         *
+         * req.params.universityId
+         * req.body.university
+         * req.params.id
+         *
+         * The exact one used depends on the route/controller.
+         */
+
+        const requestedUniversity =
+            req.params.universityId ||
+            req.body.university;
+
+        // If the route does not specify a university,
+        // allow the controller to perform its own lookup.
+        if (!requestedUniversity) {
+
+            req.universityAdmin = admin;
+
+            return next();
+
+        }
+
+        // Compare assigned university with requested university
+        if (
+            admin.university.toString() !==
+            requestedUniversity.toString()
+        ) {
+
+            return res.status(403).json({
+                success: false,
+                message:
+                    "Access denied. You can only manage your own university."
+            });
+
+        }
+
+        // Store admin information for controllers
+        req.universityAdmin = admin;
+
+        next();
+
+    } catch (error) {
+
+        console.error(
+            "University authorization error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Server error while checking university authorization."
+        });
+
+    }
+};
 
 
 // ======================================================
@@ -141,8 +290,8 @@ const logout = async (req, res) => {
 
     });
 
-
 };
+
 
 // ======================================================
 // CHANGE PASSWORD
@@ -153,7 +302,6 @@ const changePassword = async (
     res
 ) => {
 
-
     try {
 
         const {
@@ -161,131 +309,103 @@ const changePassword = async (
             newPassword
         } = req.body;
 
-
-        // Check authentication
         if (!req.user) {
 
             return res.status(401).json({
-
                 success: false,
-
-                message:
-                    "User not authenticated"
-
+                message: "User not authenticated"
             });
 
         }
 
-
-        // Validate fields
         if (
             !currentPassword ||
             !newPassword
         ) {
 
             return res.status(400).json({
-
                 success: false,
-
                 message:
                     "Current and new password are required"
-
             });
 
         }
 
-
-        // Password length
         if (newPassword.length < 6) {
 
             return res.status(400).json({
-
                 success: false,
-
                 message:
                     "New password must be at least 6 characters"
-
             });
 
         }
 
-
         let account;
 
-
-        // Determine account type
+        // Student
         if (
             req.user.role === "student"
         ) {
 
-            account =
-                await Student.findById(
-                    req.user.id
-                );
+            account = await Student.findById(
+                req.user.id
+            );
 
         }
 
+        // Admin
         else if (
-
             [
                 "super_admin",
                 "university_admin"
-            ].includes(
-                req.user.role
-            )
-
+            ].includes(req.user.role)
         ) {
 
-            account =
-                await User.findById(
-                    req.user.id
-                );
+            account = await User.findById(
+                req.user.id
+            );
 
         }
 
+        else {
 
-        // Check account
+            return res.status(403).json({
+                success: false,
+                message: "Invalid account role."
+            });
+
+        }
+
         if (
             !account ||
             !account.isActive
         ) {
 
             return res.status(404).json({
-
                 success: false,
-
                 message:
                     "Account not found or inactive"
-
             });
 
         }
 
-
-        // Check current password
+        // Check old password
         const passwordMatch =
             await bcrypt.compare(
-
                 currentPassword,
-
                 account.password
-
             );
-
 
         if (!passwordMatch) {
 
             return res.status(401).json({
-
                 success: false,
-
                 message:
                     "Current password is incorrect"
-
             });
 
         }
-
 
         // Hash new password
         account.password =
@@ -294,17 +414,12 @@ const changePassword = async (
                 10
             );
 
-
         await account.save();
 
-
         return res.status(200).json({
-
             success: true,
-
             message:
                 "Password changed successfully"
-
         });
 
     } catch (error) {
@@ -315,18 +430,14 @@ const changePassword = async (
         );
 
         return res.status(500).json({
-
             success: false,
-
             message:
                 "Server error while changing password"
-
         });
 
     }
-
-
 };
+
 
 // ======================================================
 // FORGOT PASSWORD
@@ -337,126 +448,80 @@ const forgotPassword = async (
     res
 ) => {
 
-
     try {
 
-        const {
-            email
-        } = req.body;
-
+        const { email } = req.body;
 
         if (!email) {
 
             return res.status(400).json({
-
                 success: false,
-
-                message:
-                    "Email is required"
-
+                message: "Email is required"
             });
 
         }
 
-
         const normalizedEmail =
-            email
-                .toLowerCase()
-                .trim();
+            email.toLowerCase().trim();
 
-
-        // Check student first
+        // Check student
         let account =
             await Student.findOne({
-
-                email:
-                    normalizedEmail
-
+                email: normalizedEmail
             });
 
+        let accountType = "student";
 
-        let accountType =
-            "student";
-
-
-        // Check admin if student doesn't exist
+        // Check admin
         if (!account) {
 
             account =
                 await User.findOne({
-
-                    email:
-                        normalizedEmail
-
+                    email: normalizedEmail
                 });
 
-
-            accountType =
-                "admin";
-
+            accountType = "admin";
         }
 
-
-        // Security: Don't reveal whether email exists
+        // Do not reveal whether email exists
         if (
             !account ||
             !account.isActive
         ) {
 
             return res.status(200).json({
-
                 success: true,
-
                 message:
                     "If the email exists, a password reset link will be sent"
-
             });
 
         }
 
-
         // Generate reset token
         const resetToken =
             jwt.sign(
-
                 {
-
                     id: account._id,
-
-                    purpose:
-                        "password_reset",
-
+                    purpose: "password_reset",
                     accountType
-
                 },
-
                 JWT_SECRET,
-
                 {
-
-                    expiresIn:
-                        "15m"
-
+                    expiresIn: "15m"
                 }
-
             );
 
-
         // TEMPORARY
-        // Later we will send this through email
+        // Replace with email service later
         console.log(
             "Password reset token:",
             resetToken
         );
 
-
         return res.status(200).json({
-
             success: true,
-
             message:
                 "If the email exists, a password reset link will be sent"
-
         });
 
     } catch (error) {
@@ -467,18 +532,13 @@ const forgotPassword = async (
         );
 
         return res.status(500).json({
-
             success: false,
-
-            message:
-                "Server error"
-
+            message: "Server error"
         });
 
     }
-
-
 };
+
 
 // ======================================================
 // RESET PASSWORD
@@ -489,7 +549,6 @@ const resetPassword = async (
     res
 ) => {
 
-
     try {
 
         const {
@@ -497,86 +556,64 @@ const resetPassword = async (
             newPassword
         } = req.body;
 
-
         if (
             !token ||
             !newPassword
         ) {
 
             return res.status(400).json({
-
                 success: false,
-
                 message:
                     "Reset token and new password are required"
-
             });
 
         }
-
 
         if (newPassword.length < 6) {
 
             return res.status(400).json({
-
                 success: false,
-
                 message:
                     "Password must be at least 6 characters"
-
             });
 
         }
 
-
         let decoded;
 
-
-        // Verify reset token
         try {
 
-            decoded =
-                jwt.verify(
-                    token,
-                    JWT_SECRET
-                );
+            decoded = jwt.verify(
+                token,
+                JWT_SECRET
+            );
 
         } catch (error) {
 
             return res.status(400).json({
-
                 success: false,
-
                 message:
                     "Invalid or expired reset token"
-
             });
 
         }
 
-
-        // Verify token purpose
         if (
             decoded.purpose !==
             "password_reset"
         ) {
 
             return res.status(400).json({
-
                 success: false,
-
                 message:
                     "Invalid password reset token"
-
             });
 
         }
 
-
         let account;
 
-
-        // Find correct account
+        // Student
         if (
             decoded.accountType ===
             "student"
@@ -587,7 +624,12 @@ const resetPassword = async (
                     decoded.id
                 );
 
-        } else {
+        }
+
+        // Admin
+        else if (
+            decoded.accountType === "admin"
+        ) {
 
             account =
                 await User.findById(
@@ -596,6 +638,15 @@ const resetPassword = async (
 
         }
 
+        else {
+
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Invalid account type"
+            });
+
+        }
 
         if (
             !account ||
@@ -603,16 +654,12 @@ const resetPassword = async (
         ) {
 
             return res.status(404).json({
-
                 success: false,
-
                 message:
                     "Account not found or inactive"
-
             });
 
         }
-
 
         // Update password
         account.password =
@@ -621,17 +668,12 @@ const resetPassword = async (
                 10
             );
 
-
         await account.save();
 
-
         return res.status(200).json({
-
             success: true,
-
             message:
                 "Password reset successfully"
-
         });
 
     } catch (error) {
@@ -642,18 +684,14 @@ const resetPassword = async (
         );
 
         return res.status(500).json({
-
             success: false,
-
             message:
                 "Server error while resetting password"
-
         });
 
     }
-
-
 };
+
 
 // ======================================================
 // EXPORTS
@@ -661,14 +699,13 @@ const resetPassword = async (
 
 module.exports = {
 
-
     generateToken,
 
     auth,
 
     authorizeRoles,
 
-
+    authorizeUniversity,
 
     logout,
 
@@ -677,6 +714,5 @@ module.exports = {
     forgotPassword,
 
     resetPassword
-
 
 };

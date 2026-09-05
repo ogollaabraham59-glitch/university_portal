@@ -14,7 +14,11 @@ const {
     searchUniversities
 } = require("../controllers/universityControllers");
 
-const { auth, authorizeRoles } = require('../midllewear/auth')
+const {
+    auth,
+    authorizeRoles
+} = require("../midllewear/auth");
+
 const {
     checkUniversityOwnership
 } = require("../midllewear/universityOwnership");
@@ -30,13 +34,11 @@ router.get(
     getUniversities
 );
 
-
 // Search universities
 router.get(
     "/search",
     searchUniversities
 );
-
 
 // Get university details
 router.get(
@@ -50,19 +52,14 @@ router.get(
 // ======================================================
 
 // Create university
-router.post('/', auth, authorizeRoles('super_admin'), createUniversity
-);
-
-
-// Update university
-router.put(
-    "/:id",
+router.post(
+    "/",
     auth,
-    authorizeRoles("super_admin", "university_admin"), checkUniversityOwnership, updateUniversity
+    authorizeRoles("super_admin"),
+    createUniversity
 );
 
-
-// Delete university
+// Delete/deactivate university
 router.delete(
     "/:id",
     auth,
@@ -70,31 +67,43 @@ router.delete(
     deleteUniversity
 );
 
-
 // Verify university
-router.put(
+router.patch(
     "/:id/verify",
     auth,
     authorizeRoles("super_admin"),
     verifyUniversity
 );
 
-
 // Activate university
-router.put(
+router.patch(
     "/:id/activate",
     auth,
     authorizeRoles("super_admin"),
     activateUniversity
 );
 
-
 // Deactivate university
-router.put(
+router.patch(
     "/:id/deactivate",
     auth,
     authorizeRoles("super_admin"),
     deactivateUniversity
+);
+
+
+// ======================================================
+// UPDATE UNIVERSITY
+// ======================================================
+
+// Super admin can update any university.
+// University admin can update ONLY their own university.
+router.put(
+    "/:id",
+    auth,
+    authorizeRoles("super_admin", "university_admin"),
+    checkUniversityOwnership,
+    updateUniversity
 );
 
 

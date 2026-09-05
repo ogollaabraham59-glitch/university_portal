@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const {
     Notification,
     Student
@@ -14,8 +16,7 @@ const createNotification = async (req, res) => {
             student,
             title,
             message,
-            type,
-            link
+            type
         } = req.body;
 
         // ------------------------------------------
@@ -25,13 +26,23 @@ const createNotification = async (req, res) => {
         if (!student || !title || !message) {
             return res.status(400).json({
                 success: false,
-                message:
-                    "User, title and message are required"
+                message: "Student, title and message are required"
             });
         }
 
         // ------------------------------------------
-        // Check user
+        // Validate student ID
+        // ------------------------------------------
+
+        if (!mongoose.Types.ObjectId.isValid(student)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid student ID"
+            });
+        }
+
+        // ------------------------------------------
+        // Check student
         // ------------------------------------------
 
         const studentExists = await Student.findById(student);
@@ -39,7 +50,29 @@ const createNotification = async (req, res) => {
         if (!studentExists) {
             return res.status(404).json({
                 success: false,
-                message: "student not found"
+                message: "Student not found"
+            });
+        }
+
+        // ------------------------------------------
+        // Validate notification type
+        // ------------------------------------------
+
+        const allowedTypes = [
+            "application",
+            "recommendation",
+            "course",
+            "university",
+            "system"
+        ];
+
+        const notificationType = type || "system";
+
+        if (!allowedTypes.includes(notificationType)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Invalid notification type"
             });
         }
 
@@ -48,11 +81,11 @@ const createNotification = async (req, res) => {
         // ------------------------------------------
 
         const notification = await Notification.create({
-            student,
+            recipient: student,
+            recipientType: "Student",
             title: title.trim(),
             message: message.trim(),
-            type: type || "general",
-            link: link || "",
+            type: notificationType,
             isRead: false
         });
 
@@ -84,14 +117,11 @@ const createNotification = async (req, res) => {
 
 const getMyNotifications = async (req, res) => {
     try {
-        // ------------------------------------------
-        // Get logged-in user from JWT
-        // ------------------------------------------
-
         const studentId = req.user.id;
 
         const notifications = await Notification.find({
-            student: studentId
+            recipient: studentId,
+            recipientType: "Student"
         })
             .sort({
                 createdAt: -1
@@ -125,16 +155,16 @@ const getMyNotifications = async (req, res) => {
 
 const getUnreadNotifications = async (req, res) => {
     try {
-        const studentId = req.student.id;
+        const studentId = req.user.id;
 
-        const notifications =
-            await Notification.find({
-                student: studentId,
-                isRead: false
-            })
-                .sort({
-                    createdAt: -1
-                });
+        const notifications = await Notification.find({
+            recipient: studentId,
+            recipientType: "Student",
+            isRead: false
+        })
+            .sort({
+                createdAt: -1
+            });
 
         return res.status(200).json({
             success: true,
@@ -164,18 +194,25 @@ const getUnreadNotifications = async (req, res) => {
 
 const markAsRead = async (req, res) => {
     try {
-        const studendId = req.Student.id;
+        const studentId = req.user.id;
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid notification ID"
+            });
+        }
+
         // ------------------------------------------
-        // Find notification belonging to user
+        // Find notification belonging to student
         // ------------------------------------------
 
-        const notification =
-            await Notification.findOne({
-                _id: id,
-                student: studentId
-            });
+        const notification = await Notification.findOne({
+            _id: id,
+            recipient: studentId,
+            recipientType: "Student"
+        });
 
         if (!notification) {
             return res.status(404).json({
@@ -220,20 +257,20 @@ const markAsRead = async (req, res) => {
 
 const markAllAsRead = async (req, res) => {
     try {
-        const studentId = req.student.id;
+        const studentId = req.user.id;
 
-        const result =
-            await Notification.updateMany(
-                {
-                    student: StudentId,
-                    isRead: false
-                },
-                {
-                    $set: {
-                        isRead: true
-                    }
+        const result = await Notification.updateMany(
+            {
+                recipient: studentId,
+                recipientType: "Student",
+                isRead: false
+            },
+            {
+                $set: {
+                    isRead: true
                 }
-            );
+            }
+        );
 
         return res.status(200).json({
             success: true,
@@ -264,17 +301,25 @@ const markAllAsRead = async (req, res) => {
 
 const deleteNotification = async (req, res) => {
     try {
-        const studentId = req.student.id;
+        const studentId = req.user.id;
         const { id } = req.params;
 
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid notification ID"
+            });
+        }
+
         // ------------------------------------------
-        // Only delete user's own notification
+        // Only delete student's own notification
         // ------------------------------------------
 
         const notification =
             await Notification.findOneAndDelete({
                 _id: id,
-                student: studentId
+                recipient: studentId,
+                recipientType: "Student"
             });
 
         if (!notification) {
@@ -312,11 +357,12 @@ const deleteNotification = async (req, res) => {
 
 const deleteAllNotifications = async (req, res) => {
     try {
-        const studentId = req.student.id;
+        const studentId = req.user.id;
 
         const result =
             await Notification.deleteMany({
-                student: studentId
+                recipient: studentId,
+                recipientType: "Student"
             });
 
         return res.status(200).json({

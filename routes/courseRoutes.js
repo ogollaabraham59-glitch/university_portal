@@ -14,7 +14,8 @@ const {
 
 const {
     auth,
-    authorizeRoles
+    authorizeRoles,
+    authorizeUniversity
 } = require("../midllewear/auth");
 
 
@@ -28,20 +29,17 @@ router.get(
     getCourses
 );
 
-
 // Search courses
 router.get(
     "/search",
     searchCourses
 );
 
-
-// Get courses belonging to a university
+// Get courses offered by a specific university
 router.get(
     "/university/:universityId",
     getCoursesByUniversity
 );
-
 
 // Get one course
 router.get(
@@ -51,14 +49,17 @@ router.get(
 
 
 // ======================================================
-// UNIVERSITY ADMIN / SUPER ADMIN
+// ADMIN ROUTES
 // ======================================================
 
 // Create course
 router.post(
     "/",
     auth,
-    authorizeRoles("university_admin", "super_admin"),
+    authorizeRoles(
+        "university_admin",
+        "super_admin"
+    ),
     createCourse
 );
 
@@ -67,7 +68,10 @@ router.post(
 router.put(
     "/:id",
     auth,
-    authorizeRoles("university_admin", "super_admin"),
+    authorizeRoles(
+        "university_admin",
+        "super_admin"
+    ),
     updateCourse
 );
 
@@ -76,7 +80,10 @@ router.put(
 router.delete(
     "/:id",
     auth,
-    authorizeRoles("university_admin", "super_admin"),
+    authorizeRoles(
+        "university_admin",
+        "super_admin"
+    ),
     deleteCourse
 );
 

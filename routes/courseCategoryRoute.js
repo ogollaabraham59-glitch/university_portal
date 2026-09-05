@@ -19,15 +19,14 @@ const {
 
 
 // ======================================================
-// PUBLIC
+// PUBLIC ROUTES
 // ======================================================
 
-// Get active categories
+// Get all active categories
 router.get(
     "/",
     getCategories
 );
-
 
 // Get category by ID
 router.get(
@@ -37,7 +36,7 @@ router.get(
 
 
 // ======================================================
-// SUPER ADMIN
+// SUPER ADMIN ROUTES
 // ======================================================
 
 // Create category
@@ -48,7 +47,6 @@ router.post(
     createCategory
 );
 
-
 // Update category
 router.put(
     "/:id",
@@ -56,7 +54,6 @@ router.put(
     authorizeRoles("super_admin"),
     updateCategory
 );
-
 
 // Delete category
 router.delete(
@@ -66,18 +63,16 @@ router.delete(
     deleteCategory
 );
 
-
 // Activate category
-router.put(
+router.patch(
     "/:id/activate",
     auth,
     authorizeRoles("super_admin"),
     activateCategory
 );
 
-
 // Deactivate category
-router.put(
+router.patch(
     "/:id/deactivate",
     auth,
     authorizeRoles("super_admin"),

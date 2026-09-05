@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+
 const {
     UniversityCourse,
     Course,
@@ -14,14 +16,18 @@ const addCourseToUniversity = async (req, res) => {
         const {
             university,
             course,
-            fees,
-            intakes,
+            campus,
+            annualFees,
+            applicationFee,
+            mode,
+            intake,
             applicationLink,
-            availability
+            isAvailable
         } = req.body;
 
+
         // ------------------------------------------
-        // Validate required fields
+        // Validate IDs
         // ------------------------------------------
 
         if (!university || !course) {
@@ -31,13 +37,22 @@ const addCourseToUniversity = async (req, res) => {
             });
         }
 
+        if (
+            !mongoose.Types.ObjectId.isValid(university) ||
+            !mongoose.Types.ObjectId.isValid(course)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university or course ID"
+            });
+        }
+
+
         // ------------------------------------------
         // Check university
         // ------------------------------------------
 
-        const universityExists = await University.findById(
-            university
-        );
+        const universityExists = await University.findById(university);
 
         if (!universityExists) {
             return res.status(404).json({
@@ -45,6 +60,14 @@ const addCourseToUniversity = async (req, res) => {
                 message: "University not found"
             });
         }
+
+        if (!universityExists.isActive) {
+            return res.status(400).json({
+                success: false,
+                message: "This university is inactive"
+            });
+        }
+
 
         // ------------------------------------------
         // Check course
@@ -58,6 +81,14 @@ const addCourseToUniversity = async (req, res) => {
                 message: "Course not found"
             });
         }
+
+        if (!courseExists.isActive) {
+            return res.status(400).json({
+                success: false,
+                message: "This course is inactive"
+            });
+        }
+
 
         // ------------------------------------------
         // Prevent duplicate
@@ -77,21 +108,101 @@ const addCourseToUniversity = async (req, res) => {
             });
         }
 
+
+        // ------------------------------------------
+        // Validate intake
+        // ------------------------------------------
+
+        if (
+            intake !== undefined &&
+            !Array.isArray(intake)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Intake must be an array"
+            });
+        }
+
+
+        // ------------------------------------------
+        // Validate mode
+        // ------------------------------------------
+
+        const allowedModes = [
+            "Full Time",
+            "Part Time",
+            "Online"
+        ];
+
+        if (
+            mode !== undefined &&
+            !allowedModes.includes(mode)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Mode must be Full Time, Part Time, or Online"
+            });
+        }
+
+
+        // ------------------------------------------
+        // Validate fees
+        // ------------------------------------------
+
+        if (
+            annualFees !== undefined &&
+            Number(annualFees) < 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Annual fees cannot be negative"
+            });
+        }
+
+        if (
+            applicationFee !== undefined &&
+            Number(applicationFee) < 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Application fee cannot be negative"
+            });
+        }
+
+
         // ------------------------------------------
         // Create UniversityCourse
         // ------------------------------------------
 
-        const universityCourse = await UniversityCourse.create({
-            university,
-            course,
-            fees,
-            intakes: intakes || [],
-            applicationLink: applicationLink || "",
-            availability:
-                availability !== undefined
-                    ? availability
-                    : true
-        });
+        const universityCourse =
+            await UniversityCourse.create({
+                university,
+                course,
+                campus: campus || "",
+                annualFees:
+                    annualFees !== undefined
+                        ? Number(annualFees)
+                        : 0,
+
+                applicationFee:
+                    applicationFee !== undefined
+                        ? Number(applicationFee)
+                        : 0,
+
+                mode: mode || "Full Time",
+
+                intake: intake || [],
+
+                applicationLink:
+                    applicationLink || "",
+
+                isAvailable:
+                    isAvailable !== undefined
+                        ? isAvailable
+                        : true
+            });
+
 
         // ------------------------------------------
         // Populate
@@ -103,12 +214,13 @@ const addCourseToUniversity = async (req, res) => {
             )
                 .populate(
                     "university",
-                    "name location county logo"
+                    "name location county country logo website"
                 )
                 .populate(
                     "course",
-                    "courseName duration minimumGrade department mode"
+                    "courseName courseCode description duration minimumGrade department mode"
                 );
+
 
         return res.status(201).json({
             success: true,
@@ -118,11 +230,22 @@ const addCourseToUniversity = async (req, res) => {
                 populatedUniversityCourse
         });
 
+
     } catch (error) {
+
         console.error(
             "Add course to university error:",
             error
         );
+
+        // Handle duplicate compound index
+        if (error.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message:
+                    "This course is already offered by this university"
+            });
+        }
 
         return res.status(500).json({
             success: false,
@@ -140,15 +263,28 @@ const addCourseToUniversity = async (req, res) => {
 
 const getUniversityCourses = async (req, res) => {
     try {
+
         const { universityId } = req.params;
+
+
+        // ------------------------------------------
+        // Validate ID
+        // ------------------------------------------
+
+        if (!mongoose.Types.ObjectId.isValid(universityId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university ID"
+            });
+        }
+
 
         // ------------------------------------------
         // Check university
         // ------------------------------------------
 
-        const university = await University.findById(
-            universityId
-        );
+        const university =
+            await University.findById(universityId);
 
         if (!university) {
             return res.status(404).json({
@@ -157,25 +293,28 @@ const getUniversityCourses = async (req, res) => {
             });
         }
 
+
         // ------------------------------------------
         // Get courses
         // ------------------------------------------
 
         const universityCourses =
             await UniversityCourse.find({
-                university: universityId
+                university: universityId,
+                isAvailable: true
             })
                 .populate(
                     "course",
-                    "courseName duration minimumGrade department mode"
+                    "courseName courseCode description duration minimumGrade department mode"
                 )
                 .populate(
                     "university",
-                    "name location county logo"
+                    "name location county country logo website"
                 )
                 .sort({
                     createdAt: -1
                 });
+
 
         return res.status(200).json({
             success: true,
@@ -183,7 +322,9 @@ const getUniversityCourses = async (req, res) => {
             universityCourses
         });
 
+
     } catch (error) {
+
         console.error(
             "Get university courses error:",
             error
@@ -205,13 +346,28 @@ const getUniversityCourses = async (req, res) => {
 
 const getCourseUniversities = async (req, res) => {
     try {
+
         const { courseId } = req.params;
+
+
+        // ------------------------------------------
+        // Validate ID
+        // ------------------------------------------
+
+        if (!mongoose.Types.ObjectId.isValid(courseId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid course ID"
+            });
+        }
+
 
         // ------------------------------------------
         // Check course
         // ------------------------------------------
 
-        const course = await Course.findById(courseId);
+        const course =
+            await Course.findById(courseId);
 
         if (!course) {
             return res.status(404).json({
@@ -220,13 +376,15 @@ const getCourseUniversities = async (req, res) => {
             });
         }
 
+
         // ------------------------------------------
         // Find universities
         // ------------------------------------------
 
         const universityCourses =
             await UniversityCourse.find({
-                course: courseId
+                course: courseId,
+                isAvailable: true
             })
                 .populate(
                     "university",
@@ -234,8 +392,9 @@ const getCourseUniversities = async (req, res) => {
                 )
                 .populate(
                     "course",
-                    "courseName duration minimumGrade department mode"
+                    "courseName courseCode description duration minimumGrade department mode"
                 );
+
 
         return res.status(200).json({
             success: true,
@@ -243,7 +402,9 @@ const getCourseUniversities = async (req, res) => {
             universityCourses
         });
 
+
     } catch (error) {
+
         console.error(
             "Get course universities error:",
             error
@@ -265,7 +426,17 @@ const getCourseUniversities = async (req, res) => {
 
 const getUniversityCourseById = async (req, res) => {
     try {
+
         const { id } = req.params;
+
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university course ID"
+            });
+        }
+
 
         const universityCourse =
             await UniversityCourse.findById(id)
@@ -275,8 +446,9 @@ const getUniversityCourseById = async (req, res) => {
                 )
                 .populate(
                     "course",
-                    "courseName duration minimumGrade department mode"
+                    "courseName courseCode description duration minimumGrade department mode"
                 );
+
 
         if (!universityCourse) {
             return res.status(404).json({
@@ -285,12 +457,15 @@ const getUniversityCourseById = async (req, res) => {
             });
         }
 
+
         return res.status(200).json({
             success: true,
             universityCourse
         });
 
+
     } catch (error) {
+
         console.error(
             "Get university course error:",
             error
@@ -312,14 +487,31 @@ const getUniversityCourseById = async (req, res) => {
 
 const updateUniversityCourse = async (req, res) => {
     try {
+
         const { id } = req.params;
 
         const {
-            fees,
-            intakes,
+            campus,
+            annualFees,
+            applicationFee,
+            mode,
+            intake,
             applicationLink,
-            availability
+            isAvailable
         } = req.body;
+
+
+        // ------------------------------------------
+        // Validate ID
+        // ------------------------------------------
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university course ID"
+            });
+        }
+
 
         // ------------------------------------------
         // Find university course
@@ -335,29 +527,95 @@ const updateUniversityCourse = async (req, res) => {
             });
         }
 
+
         // ------------------------------------------
-        // Fees
+        // Campus
         // ------------------------------------------
 
-        if (fees !== undefined) {
-            universityCourse.fees = fees;
+        if (campus !== undefined) {
+            universityCourse.campus = campus;
         }
 
+
         // ------------------------------------------
-        // Intakes
+        // Annual fees
         // ------------------------------------------
 
-        if (intakes !== undefined) {
+        if (annualFees !== undefined) {
 
-            if (!Array.isArray(intakes)) {
+            if (Number(annualFees) < 0) {
                 return res.status(400).json({
                     success: false,
-                    message: "Intakes must be an array"
+                    message:
+                        "Annual fees cannot be negative"
                 });
             }
 
-            universityCourse.intakes = intakes;
+            universityCourse.annualFees =
+                Number(annualFees);
         }
+
+
+        // ------------------------------------------
+        // Application fee
+        // ------------------------------------------
+
+        if (applicationFee !== undefined) {
+
+            if (Number(applicationFee) < 0) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Application fee cannot be negative"
+                });
+            }
+
+            universityCourse.applicationFee =
+                Number(applicationFee);
+        }
+
+
+        // ------------------------------------------
+        // Mode
+        // ------------------------------------------
+
+        if (mode !== undefined) {
+
+            const allowedModes = [
+                "Full Time",
+                "Part Time",
+                "Online"
+            ];
+
+            if (!allowedModes.includes(mode)) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Mode must be Full Time, Part Time, or Online"
+                });
+            }
+
+            universityCourse.mode = mode;
+        }
+
+
+        // ------------------------------------------
+        // Intake
+        // ------------------------------------------
+
+        if (intake !== undefined) {
+
+            if (!Array.isArray(intake)) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "Intake must be an array"
+                });
+            }
+
+            universityCourse.intake = intake;
+        }
+
 
         // ------------------------------------------
         // Application link
@@ -365,30 +623,47 @@ const updateUniversityCourse = async (req, res) => {
 
         if (applicationLink !== undefined) {
             universityCourse.applicationLink =
-                applicationLink;
+                applicationLink.trim();
         }
+
 
         // ------------------------------------------
         // Availability
         // ------------------------------------------
 
-        if (availability !== undefined) {
-            universityCourse.availability =
-                availability;
+        if (isAvailable !== undefined) {
+
+            if (typeof isAvailable !== "boolean") {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        "isAvailable must be true or false"
+                });
+            }
+
+            universityCourse.isAvailable =
+                isAvailable;
         }
 
+
         await universityCourse.save();
+
+
+        // ------------------------------------------
+        // Populate updated record
+        // ------------------------------------------
 
         const updatedUniversityCourse =
             await UniversityCourse.findById(id)
                 .populate(
                     "university",
-                    "name location county logo"
+                    "name location county country logo"
                 )
                 .populate(
                     "course",
-                    "courseName duration minimumGrade department mode"
+                    "courseName courseCode description duration minimumGrade department mode"
                 );
+
 
         return res.status(200).json({
             success: true,
@@ -398,7 +673,9 @@ const updateUniversityCourse = async (req, res) => {
                 updatedUniversityCourse
         });
 
+
     } catch (error) {
+
         console.error(
             "Update university course error:",
             error
@@ -420,7 +697,17 @@ const updateUniversityCourse = async (req, res) => {
 
 const removeCourseFromUniversity = async (req, res) => {
     try {
+
         const { id } = req.params;
+
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university course ID"
+            });
+        }
+
 
         const universityCourse =
             await UniversityCourse.findById(id);
@@ -432,7 +719,9 @@ const removeCourseFromUniversity = async (req, res) => {
             });
         }
 
+
         await UniversityCourse.findByIdAndDelete(id);
+
 
         return res.status(200).json({
             success: true,
@@ -440,7 +729,9 @@ const removeCourseFromUniversity = async (req, res) => {
                 "Course removed from university successfully"
         });
 
+
     } catch (error) {
+
         console.error(
             "Remove course from university error:",
             error
@@ -457,35 +748,43 @@ const removeCourseFromUniversity = async (req, res) => {
 
 
 // ======================================================
-// 7. UPDATE FEES
+// 7. UPDATE ANNUAL FEES
 // ======================================================
 
-const updateFees = async (req, res) => {
+const updateAnnualFees = async (req, res) => {
     try {
+
         const { id } = req.params;
-        const { fees } = req.body;
+        const { annualFees } = req.body;
 
-        // ------------------------------------------
-        // Validate
-        // ------------------------------------------
 
-        if (fees === undefined || fees === null) {
+        if (
+            annualFees === undefined ||
+            annualFees === null
+        ) {
             return res.status(400).json({
                 success: false,
-                message: "Fees are required"
+                message: "Annual fees are required"
             });
         }
 
-        if (Number(fees) < 0) {
+
+        if (Number(annualFees) < 0) {
             return res.status(400).json({
                 success: false,
-                message: "Fees cannot be negative"
+                message:
+                    "Annual fees cannot be negative"
             });
         }
 
-        // ------------------------------------------
-        // Find university course
-        // ------------------------------------------
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid university course ID"
+            });
+        }
+
 
         const universityCourse =
             await UniversityCourse.findById(id);
@@ -493,27 +792,38 @@ const updateFees = async (req, res) => {
         if (!universityCourse) {
             return res.status(404).json({
                 success: false,
-                message: "University course not found"
+                message:
+                    "University course not found"
             });
         }
 
-        universityCourse.fees = Number(fees);
+
+        universityCourse.annualFees =
+            Number(annualFees);
 
         await universityCourse.save();
 
+
         return res.status(200).json({
             success: true,
-            message: "Course fees updated successfully",
-            fees: universityCourse.fees
+            message:
+                "Annual fees updated successfully",
+            annualFees:
+                universityCourse.annualFees
         });
 
+
     } catch (error) {
-        console.error("Update fees error:", error);
+
+        console.error(
+            "Update annual fees error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
             message:
-                "Server error while updating course fees",
+                "Server error while updating annual fees",
             error: error.message
         });
     }
@@ -521,28 +831,33 @@ const updateFees = async (req, res) => {
 
 
 // ======================================================
-// 8. UPDATE INTAKES
+// 8. UPDATE INTAKE
 // ======================================================
 
-const updateIntakes = async (req, res) => {
+const updateIntake = async (req, res) => {
     try {
+
         const { id } = req.params;
-        const { intakes } = req.body;
+        const { intake } = req.body;
 
-        // ------------------------------------------
-        // Validate
-        // ------------------------------------------
 
-        if (!Array.isArray(intakes)) {
+        if (!Array.isArray(intake)) {
             return res.status(400).json({
                 success: false,
-                message: "Intakes must be an array"
+                message:
+                    "Intake must be an array"
             });
         }
 
-        // ------------------------------------------
-        // Find university course
-        // ------------------------------------------
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Invalid university course ID"
+            });
+        }
+
 
         const universityCourse =
             await UniversityCourse.findById(id);
@@ -550,27 +865,37 @@ const updateIntakes = async (req, res) => {
         if (!universityCourse) {
             return res.status(404).json({
                 success: false,
-                message: "University course not found"
+                message:
+                    "University course not found"
             });
         }
 
-        universityCourse.intakes = intakes;
+
+        universityCourse.intake = intake;
 
         await universityCourse.save();
 
+
         return res.status(200).json({
             success: true,
-            message: "Course intakes updated successfully",
-            intakes: universityCourse.intakes
+            message:
+                "Course intake updated successfully",
+            intake:
+                universityCourse.intake
         });
 
+
     } catch (error) {
-        console.error("Update intakes error:", error);
+
+        console.error(
+            "Update intake error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
             message:
-                "Server error while updating course intakes",
+                "Server error while updating course intake",
             error: error.message
         });
     }
@@ -583,23 +908,28 @@ const updateIntakes = async (req, res) => {
 
 const updateApplicationLink = async (req, res) => {
     try {
+
         const { id } = req.params;
         const { applicationLink } = req.body;
 
-        // ------------------------------------------
-        // Validate
-        // ------------------------------------------
 
         if (!applicationLink) {
             return res.status(400).json({
                 success: false,
-                message: "Application link is required"
+                message:
+                    "Application link is required"
             });
         }
 
-        // ------------------------------------------
-        // Find university course
-        // ------------------------------------------
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Invalid university course ID"
+            });
+        }
+
 
         const universityCourse =
             await UniversityCourse.findById(id);
@@ -607,14 +937,17 @@ const updateApplicationLink = async (req, res) => {
         if (!universityCourse) {
             return res.status(404).json({
                 success: false,
-                message: "University course not found"
+                message:
+                    "University course not found"
             });
         }
+
 
         universityCourse.applicationLink =
             applicationLink.trim();
 
         await universityCourse.save();
+
 
         return res.status(200).json({
             success: true,
@@ -624,7 +957,9 @@ const updateApplicationLink = async (req, res) => {
                 universityCourse.applicationLink
         });
 
+
     } catch (error) {
+
         console.error(
             "Update application link error:",
             error
@@ -646,24 +981,28 @@ const updateApplicationLink = async (req, res) => {
 
 const updateAvailability = async (req, res) => {
     try {
+
         const { id } = req.params;
-        const { availability } = req.body;
+        const { isAvailable } = req.body;
 
-        // ------------------------------------------
-        // Validate
-        // ------------------------------------------
 
-        if (typeof availability !== "boolean") {
+        if (typeof isAvailable !== "boolean") {
             return res.status(400).json({
                 success: false,
                 message:
-                    "Availability must be true or false"
+                    "isAvailable must be true or false"
             });
         }
 
-        // ------------------------------------------
-        // Find university course
-        // ------------------------------------------
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "Invalid university course ID"
+            });
+        }
+
 
         const universityCourse =
             await UniversityCourse.findById(id);
@@ -671,24 +1010,29 @@ const updateAvailability = async (req, res) => {
         if (!universityCourse) {
             return res.status(404).json({
                 success: false,
-                message: "University course not found"
+                message:
+                    "University course not found"
             });
         }
 
-        universityCourse.availability =
-            availability;
+
+        universityCourse.isAvailable =
+            isAvailable;
 
         await universityCourse.save();
+
 
         return res.status(200).json({
             success: true,
             message:
                 "Course availability updated successfully",
-            availability:
-                universityCourse.availability
+            isAvailable:
+                universityCourse.isAvailable
         });
 
+
     } catch (error) {
+
         console.error(
             "Update availability error:",
             error
@@ -715,8 +1059,8 @@ module.exports = {
     getUniversityCourseById,
     updateUniversityCourse,
     removeCourseFromUniversity,
-    updateFees,
-    updateIntakes,
+    updateAnnualFees,
+    updateIntake,
     updateApplicationLink,
     updateAvailability
 };

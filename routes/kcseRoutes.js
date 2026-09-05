@@ -18,8 +18,6 @@ const {
 } = require("../midllewear/auth");
 
 
-
-
 // ======================================================
 // STUDENT ROUTES
 // ======================================================
@@ -29,7 +27,6 @@ router.post(
     "/upload",
     auth,
     authorizeRoles("student"),
-
     uploadResultSlip
 );
 
@@ -43,7 +40,7 @@ router.get(
 );
 
 
-// Delete my result
+// Delete my KCSE result
 router.delete(
     "/:id",
     auth,
