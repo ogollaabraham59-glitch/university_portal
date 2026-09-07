@@ -5,6 +5,7 @@ const router = express.Router();
 const {
     addCourseToUniversity,
     getUniversityCourses,
+    getAllUniversityCourses,
     getCourseUniversities,
     getUniversityCourseById,
     updateUniversityCourse,
@@ -35,6 +36,13 @@ const {
 router.get(
     "/university/:universityId",
     getUniversityCourses
+);
+//superadmin get all 
+router.get(
+    "/",
+    auth,
+    authorizeRoles("super_admin"),
+    getAllUniversityCourses
 );
 
 

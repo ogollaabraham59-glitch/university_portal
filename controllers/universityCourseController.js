@@ -255,6 +255,48 @@ const addCourseToUniversity = async (req, res) => {
         });
     }
 };
+// ======================================================
+// GET ALL UNIVERSITY COURSES - SUPER ADMIN
+// ======================================================
+
+const getAllUniversityCourses = async (req, res) => {
+    try {
+
+        const universityCourses =
+            await UniversityCourse.find()
+                .populate(
+                    "university",
+                    "name location county country logo website"
+                )
+                .populate(
+                    "course",
+                    "courseName courseCode description duration minimumGrade department mode"
+                )
+                .sort({
+                    createdAt: -1
+                });
+
+        return res.status(200).json({
+            success: true,
+            count: universityCourses.length,
+            universityCourses
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Get all university courses error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Server error while getting university courses",
+            error: error.message
+        });
+    }
+};
 
 
 // ======================================================
@@ -1054,6 +1096,7 @@ const updateAvailability = async (req, res) => {
 
 module.exports = {
     addCourseToUniversity,
+    getAllUniversityCourses,
     getUniversityCourses,
     getCourseUniversities,
     getUniversityCourseById,
