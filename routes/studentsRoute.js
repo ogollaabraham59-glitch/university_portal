@@ -5,6 +5,7 @@ const router = express.Router();
 const {
     getStudentProfile,
     updateStudentProfile,
+    getAllStudents,
     updateStudentPicture,
     getStudentById,
     verifyStudent,
