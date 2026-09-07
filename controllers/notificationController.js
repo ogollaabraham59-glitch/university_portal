@@ -112,6 +112,47 @@ const createNotification = async (req, res) => {
 
 
 // ======================================================
+// 8. GET ALL NOTIFICATIONS - SUPER ADMIN
+// ======================================================
+
+const getAllNotifications = async (req, res) => {
+    try {
+
+        const notifications = await Notification.find({
+            recipientType: "Student"
+        })
+            .populate(
+                "recipient",
+                "firstName lastName email phone indexNo"
+            )
+            .sort({
+                createdAt: -1
+            });
+
+        return res.status(200).json({
+            success: true,
+            count: notifications.length,
+            notifications
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Get all notifications error:",
+            error
+        );
+
+        return res.status(500).json({
+            success: false,
+            message:
+                "Server error while getting notifications",
+            error: error.message
+        });
+    }
+};
+
+
+// ======================================================
 // 2. GET MY NOTIFICATIONS
 // ======================================================
 
@@ -395,6 +436,7 @@ const deleteAllNotifications = async (req, res) => {
 module.exports = {
     createNotification,
     getMyNotifications,
+    getAllNotifications,
     getUnreadNotifications,
     markAsRead,
     markAllAsRead,

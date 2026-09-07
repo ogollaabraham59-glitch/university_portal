@@ -5,6 +5,7 @@ const router = express.Router();
 const {
     createNotification,
     getMyNotifications,
+    getAllNotifications,
     getUnreadNotifications,
     markAsRead,
     markAllAsRead,
@@ -28,6 +29,13 @@ router.post(
     auth,
     authorizeRoles("super_admin"),
     createNotification
+);
+
+router.get(
+    "/all",
+    auth,
+    authorizeRoles("super_admin"),
+    getAllNotifications
 );
 
 
