@@ -960,6 +960,7 @@ const deactivateStudent = async (req, res) => {
 module.exports = {
     getStudentProfile,
     updateStudentProfile,
+    getAllStudents,
     updateStudentPicture,
     getStudentById,
     registerStudent,
