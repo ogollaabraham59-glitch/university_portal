@@ -193,6 +193,37 @@ const registerStudent = async (req, res) => {
     }
 }
 
+// ======================================================
+// GET ALL STUDENTS - SUPER ADMIN
+// ======================================================
+
+const getAllStudents = async (req, res) => {
+    try {
+        const students = await Student.find()
+            .populate(
+                "interestedCourses",
+                "courseName courseCode description duration minimumGrade"
+            )
+            .select("-password")
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            count: students.length,
+            students
+        });
+
+    } catch (error) {
+        console.error("Get all students error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error while getting students",
+            error: error.message
+        });
+    }
+};
+
 //student log in
 const loginStudent = async (req, res) => {
     try {

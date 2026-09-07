@@ -40,6 +40,16 @@ router.post(
 router.post(
     "/login", loginStudent
 );
+// ======================================================
+// GET ALL STUDENTS - SUPER ADMIN
+// ======================================================
+
+router.get(
+    "/",
+    auth,
+    authorizeRoles("super_admin"),
+    getAllStudents
+);
 
 // ======================================================
 // STUDENT PROFILE
