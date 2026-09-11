@@ -18,6 +18,7 @@ const savedRoutes = require('./routes/savedRoutes')
 const notification = require('./routes/notificationRoute')
 const UniversityAdminRegisterRoutes = require('./routes/universityAdminRegisterRoute')
 const eligibilityibility = require('./routes/eligibilityRoute')
+const adminstat = require('./routes/adminStatic')
 
 
 
@@ -32,6 +33,7 @@ app.use('/api/notification', notification)
 app.use('/api/coursecategory', courseCategory)
 app.use('/api/universitycourse', universityCourse)
 app.use('/api/eligibility', eligibilityibility)
+app.use('/api/adminstat', adminstat)
 
 
 
